@@ -105,31 +105,42 @@ To refresh it: `bun update @ip-location-db/dbip-city-mmdb`.
 ### ClickHouse
 
 Events can live in [ClickHouse](https://clickhouse.com) instead of DuckDB,
-for more traffic than one DuckDB file handles comfortably. Sites, settings,
-API keys and the daily salts stay in the DuckDB file either way, so keep the
-data directory.
+for more traffic than one DuckDB file handles comfortably. Only the events
+move. Sites, settings, the password, API keys and the daily salts stay in
+the DuckDB file in the data directory, so keep using the same data directory
+and don't create your sites again.
 
-```sh
-tinytraffic -clickhouse clickhouse://user:password@host:9000/tinytraffic
-```
+To switch an existing install to ClickHouse:
+
+1. Create a database in ClickHouse, e.g. `CREATE DATABASE tinytraffic`.
+   tinytraffic creates the `events` table in it, but not the database.
+2. Stop the server, then copy your existing events, using the same data
+   directory as the server:
+
+   ```sh
+   tinytraffic migrate-clickhouse -data ./data -clickhouse clickhouse://user:password@host:9000/tinytraffic
+   ```
+
+3. Start the server with the same URL, as `-clickhouse` or
+   `TT_CLICKHOUSE_URL`:
+
+   ```sh
+   tinytraffic -data ./data -clickhouse clickhouse://user:password@host:9000/tinytraffic
+   ```
+
+A new install only needs steps 1 and 3.
 
 The URL is clickhouse-go's DSN: `clickhouse://` for the native protocol
-(port 9000) or `http://` / `https://` (port 8123). The database must exist;
-tinytraffic creates the `events` table in it on start (a `MergeTree`
-partitioned by month, ordered by `(site_id, toDate(ts), visitor_id)`).
+(port 9000) or `http://` / `https://` (port 8123). The `events` table is a
+`MergeTree` partitioned by month and ordered by
+`(site_id, toDate(ts), visitor_id)`.
 
-To move existing stats over, stop the server and run:
-
-```sh
-tinytraffic migrate-clickhouse -clickhouse clickhouse://user:password@host:9000/tinytraffic
-```
-
-It copies each site's events older than the site's first event in
-ClickHouse, so it's safe to run after the server already started writing to
-ClickHouse, and to run again after an interruption: it resumes and never
-copies an event twice. The events are left in DuckDB, so you can switch back
-by dropping the flag (stats recorded in ClickHouse meanwhile aren't copied
-back).
+Steps 2 and 3 also work the other way round. The migration copies each
+site's events older than the site's first event in ClickHouse, so it doesn't
+duplicate events the server has already written there. It's safe to run
+again, and after an interruption it resumes where it stopped. The events also
+stay in DuckDB, so you can switch back by dropping the flag. Stats recorded
+in ClickHouse in the meantime aren't copied back.
 
 ### Commands
 
