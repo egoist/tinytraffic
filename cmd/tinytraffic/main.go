@@ -90,7 +90,7 @@ func serve(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	addr := fs.String("addr", env("TT_ADDR", ":8080"), "listen address")
 	dataDir := dataDirFlag(fs)
-	geoPath := fs.String("geoip", env("TT_GEOIP_DB", ""), "path to a MaxMind/DB-IP .mmdb file (default: DATA/geo.mmdb if present)")
+	geoPath := fs.String("geoip", env("TT_GEOIP_DB", ""), "comma-separated .mmdb files (default: DATA/geo.mmdb, else the npm DB-IP package in ./node_modules)")
 	memoryLimit := fs.String("memory-limit", env("TT_MEMORY_LIMIT", "1GB"), "DuckDB memory limit, e.g. 512MB or 2GB")
 	trustProxy := fs.Bool("trust-proxy", env("TT_TRUST_PROXY", "") == "true", "read client IPs from X-Forwarded-For / CF-Connecting-IP")
 	fs.Parse(args)
@@ -112,20 +112,19 @@ func serve(args []string) error {
 		}
 	}
 
-	if *geoPath == "" {
-		if p := filepath.Join(*dataDir, "geo.mmdb"); fileExists(p) {
-			*geoPath = p
-		}
+	geoFiles := splitList(*geoPath)
+	if len(geoFiles) == 0 {
+		geoFiles = defaultGeoFiles(*dataDir)
 	}
 	var geo *ingest.Geo
-	if *geoPath != "" {
-		if geo, err = ingest.OpenGeo(*geoPath); err != nil {
+	if len(geoFiles) > 0 {
+		if geo, err = ingest.OpenGeo(geoFiles...); err != nil {
 			return fmt.Errorf("open geoip db: %w", err)
 		}
 		defer geo.Close()
-		log.Info("geoip enabled", "path", *geoPath)
+		log.Info("geoip enabled", "files", strings.Join(geoFiles, ","))
 	} else {
-		log.Info("geoip disabled: put a .mmdb at DATA/geo.mmdb or pass -geoip")
+		log.Info("geoip disabled: run `bun install`, put a .mmdb at DATA/geo.mmdb, or pass -geoip")
 	}
 
 	writer := store.NewWriter(st.DB, log)
@@ -137,6 +136,7 @@ func serve(args []string) error {
 			Geo: geo, TrustProxy: *trustProxy, Log: log,
 		}),
 		Log:         log,
+		Geo:         geo,
 		Dist:        web.Dist(),
 		Tracker:     web.Tracker(),
 		TrackerPath: os.Getenv("TT_TRACKER_PATH"),
@@ -233,6 +233,33 @@ func passwordCmd(args []string) error {
 	}
 	fmt.Println("Password updated. Existing sessions are signed out.")
 	return nil
+}
+
+// defaultGeoFiles finds a GeoIP database when none is configured:
+// DATA/geo.mmdb, or the DB-IP city database from the npm package
+// @ip-location-db/dbip-city-mmdb (installed by `bun install`).
+func defaultGeoFiles(dataDir string) []string {
+	if p := filepath.Join(dataDir, "geo.mmdb"); fileExists(p) {
+		return []string{p}
+	}
+	dir := filepath.Join("node_modules", "@ip-location-db", "dbip-city-mmdb")
+	var files []string
+	for _, name := range []string{"dbip-city-ipv4.mmdb", "dbip-city-ipv6.mmdb"} {
+		if p := filepath.Join(dir, name); fileExists(p) {
+			files = append(files, p)
+		}
+	}
+	return files
+}
+
+func splitList(s string) []string {
+	var out []string
+	for _, part := range strings.Split(s, ",") {
+		if part = strings.TrimSpace(part); part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }
 
 func fileExists(p string) bool {

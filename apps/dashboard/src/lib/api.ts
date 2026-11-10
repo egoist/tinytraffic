@@ -61,6 +61,10 @@ export type BreakdownRow = {
 };
 export type Breakdown = { rows: BreakdownRow[]; total_visitors: number };
 
+export type ServerInfo = {
+  geoip: { enabled: boolean; attribution: { text: string; url: string } };
+};
+
 export type StatsParams = { period: string; from?: string; to?: string; f?: string[] };
 
 function qs(p: StatsParams, extra?: Record<string, string>) {
@@ -95,4 +99,5 @@ export const api = {
   breakdown: (domain: string, dim: string, p: StatsParams, limit = 10) =>
     request<Breakdown>(`${site(domain)}/breakdown/${dim}?${qs(p, { limit: String(limit) })}`),
   realtime: (domain: string) => request<{ visitors: number }>(`${site(domain)}/realtime`),
+  info: () => request<ServerInfo>("/api/info"),
 };

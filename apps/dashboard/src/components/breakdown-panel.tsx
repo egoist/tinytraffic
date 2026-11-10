@@ -185,6 +185,8 @@ export function BreakdownPanel(props: {
   onFilter: (dim: string, value: string) => void;
   class?: string;
   empty?: JSX.Element;
+  /** Small print at the bottom of the card, e.g. data attribution. */
+  footer?: JSX.Element;
 }) {
   // Each card remembers its last selected tab in this browser.
   const storageKey = `tt-tab:${props.title}`;
@@ -250,6 +252,10 @@ export function BreakdownPanel(props: {
             <Maximize2 class="!size-3.5" /> Details
           </Button>
         </div>
+      </Show>
+
+      <Show when={props.footer}>
+        <div class="mt-3 text-right text-[11px] text-muted-foreground">{props.footer}</div>
       </Show>
 
       <Show when={open()}>

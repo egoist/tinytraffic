@@ -48,15 +48,19 @@ and automated browsers are ignored. To exclude yourself, run
 | `-addr` | `TT_ADDR` | `:8080` | Listen address |
 | `-data` | `TT_DATA_DIR` | `./data` | Holds `tinytraffic.duckdb` |
 | `-memory-limit` | `TT_MEMORY_LIMIT` | `1GB` | DuckDB memory cap |
-| `-geoip` | `TT_GEOIP_DB` | `DATA/geo.mmdb` if present | MaxMind-format `.mmdb` (GeoLite2 or DB-IP Lite, country or city) |
+| `-geoip` | `TT_GEOIP_DB` | see below | Comma-separated `.mmdb` files (MaxMind or DB-IP format, country or city) |
 | `-trust-proxy` | `TT_TRUST_PROXY=true` | off | Read client IPs from `CF-Connecting-IP` / `X-Real-IP` / `X-Forwarded-For`. Enable only behind a reverse proxy |
 | | `TT_PASSWORD` | | Sets the password on first start, so nobody else can claim the setup screen |
 
-Locations need a GeoIP database. The free DB-IP Lite one works (CC BY 4.0):
+Locations come from a GeoIP database. `bun install` fetches DB-IP's free city
+database (CC BY 4.0) from npm as
+[`@ip-location-db/dbip-city-mmdb`](https://www.npmjs.com/package/@ip-location-db/dbip-city-mmdb),
+and the server picks it up from `./node_modules` automatically. The Docker image
+includes it. To use another database, e.g. MaxMind GeoLite2, put it at
+`DATA/geo.mmdb` or pass `-geoip`. The dashboard shows the credit line the
+database's license asks for under Locations.
 
-```sh
-curl -L https://download.db-ip.com/free/dbip-city-lite-$(date +%Y-%m).mmdb.gz | gunzip > data/geo.mmdb
-```
+To refresh the npm database: `bun update @ip-location-db/dbip-city-mmdb`.
 
 Other commands (stop the server first; DuckDB allows one process per file):
 
@@ -67,18 +71,20 @@ tinytraffic seed -days 90 demo.local    # fill a site with demo traffic (-reset 
 
 ## Deploying
 
-With Docker:
+With Docker, using the image published by the GitHub workflow
+(`.github/workflows/docker.yml`, for amd64 and arm64):
 
 ```sh
-docker build -t tinytraffic .
 docker run -d --name tinytraffic -p 8080:8080 -v tinytraffic:/data \
-  -e TT_PASSWORD=change-me -e TT_TRUST_PROXY=true tinytraffic
+  -e TT_PASSWORD=change-me -e TT_TRUST_PROXY=true ghcr.io/egoist/tinytraffic:main
 ```
 
-Data lives in the `/data` volume. Put a GeoIP database at `/data/geo.mmdb` to
-enable locations. Run the other subcommands against the same volume with the
-container stopped, e.g.
-`docker run --rm -it -v tinytraffic:/data tinytraffic password`.
+Pushes to `main` publish `:main`, and version tags (`v1.2.3`) publish `:1.2.3`,
+`:1.2` and `:latest`. To build it yourself: `docker build -t tinytraffic .`.
+
+Data lives in the `/data` volume, and the GeoIP database is built in. Run the
+other subcommands against the same volume with the container stopped, e.g.
+`docker run --rm -it -v tinytraffic:/data ghcr.io/egoist/tinytraffic:main password`.
 
 Or run the binary directly. Either way, put it behind a TLS-terminating proxy,
 e.g. Caddy:

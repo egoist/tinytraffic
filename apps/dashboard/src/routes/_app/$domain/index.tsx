@@ -59,6 +59,7 @@ function Dashboard() {
     queryFn: () => api.aggregate(domain(), stats()),
     placeholderData: keepPreviousData,
   }));
+  const info = useQuery(() => ({ queryKey: ["info"], queryFn: api.info, staleTime: Infinity }));
   const series = useQuery(() => ({
     queryKey: ["timeseries", domain(), stats()],
     queryFn: () => api.timeseries(domain(), stats()),
@@ -156,6 +157,23 @@ function Dashboard() {
             { dim: "region", label: "Regions", column: "Region", countLabel: "Pageviews" },
             { dim: "city", label: "Cities", column: "City", countLabel: "Pageviews" },
           ]}
+          empty={
+            ready(info)?.geoip.enabled === false
+              ? "Locations need a GeoIP database. See the README."
+              : undefined
+          }
+          footer={
+            <Show when={ready(info)?.geoip.attribution.url}>
+              <a
+                href={ready(info)!.geoip.attribution.url}
+                target="_blank"
+                rel="noopener"
+                class="underline-offset-4 hover:text-foreground hover:underline"
+              >
+                {ready(info)!.geoip.attribution.text}
+              </a>
+            </Show>
+          }
         />
         <BreakdownPanel
           title="Devices"

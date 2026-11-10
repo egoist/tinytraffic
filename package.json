@@ -12,5 +12,8 @@
     "build": "bun run --filter tracker build && bun run --filter dashboard build && go build -o bin/tinytraffic ./cmd/tinytraffic",
     "test": "go test ./...",
     "typecheck": "bun run --filter '*' typecheck"
+  },
+  "dependencies": {
+    "@ip-location-db/dbip-city-mmdb": "^2.3.2026060513"
   }
 }

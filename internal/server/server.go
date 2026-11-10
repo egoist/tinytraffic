@@ -27,8 +27,9 @@ type Server struct {
 	Auth    *Auth
 	Ingest  *ingest.Handler
 	Log     *slog.Logger
-	Dist    fs.FS  // built dashboard
-	Tracker []byte // tracker script
+	Geo     *ingest.Geo // nil when no GeoIP database is configured
+	Dist    fs.FS       // built dashboard
+	Tracker []byte      // tracker script
 	// TrackerPath, when set, serves the tracker from disk on every request
 	// instead of Tracker. Used by `bun dev`, where the script is rebuilt live.
 	TrackerPath string
@@ -48,6 +49,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/auth/logout", s.logout)
 	mux.HandleFunc("POST /api/auth/password", s.private(s.changePassword))
 
+	mux.HandleFunc("GET /api/info", s.private(s.info))
 	mux.HandleFunc("GET /api/sites", s.private(s.listSites))
 	mux.HandleFunc("POST /api/sites", s.private(s.createSite))
 	mux.HandleFunc("PATCH /api/sites/{domain}", s.private(s.updateSite))
@@ -174,6 +176,17 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	s.Auth.IssueCookie(w, r)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// info describes the server setup the dashboard adapts to.
+func (s *Server) info(w http.ResponseWriter, r *http.Request) {
+	attr := s.Geo.Attribution()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"geoip": map[string]any{
+			"enabled":     s.Geo != nil,
+			"attribution": attr,
+		},
+	})
 }
 
 // --- sites ---
