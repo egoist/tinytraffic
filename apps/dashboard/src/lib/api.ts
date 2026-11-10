@@ -65,6 +65,14 @@ export type ServerInfo = {
   geoip: { enabled: boolean; attribution: { text: string; url: string } };
 };
 
+export type APIKey = {
+  id: number;
+  name: string;
+  prefix: string;
+  created_at: string;
+  last_used_at: string | null;
+};
+
 export type StatsParams = { period: string; from?: string; to?: string; f?: string[] };
 
 function qs(p: StatsParams, extra?: Record<string, string>) {
@@ -100,4 +108,8 @@ export const api = {
     request<Breakdown>(`${site(domain)}/breakdown/${dim}?${qs(p, { limit: String(limit) })}`),
   realtime: (domain: string) => request<{ visitors: number }>(`${site(domain)}/realtime`),
   info: () => request<ServerInfo>("/api/info"),
+
+  keys: () => request<APIKey[]>("/api/keys"),
+  createKey: (name: string) => request<{ key: APIKey; token: string }>("/api/keys", { method: "POST", json: { name } }),
+  deleteKey: (id: number) => request(`/api/keys/${id}`, { method: "DELETE" }),
 };

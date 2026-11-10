@@ -11,6 +11,8 @@ DuckDB file, no cookies.
   IP is never stored.
 - **Dashboard**: visitors, visits, pageviews, bounce rate and visit duration,
   plus sources, pages, locations, devices and goals. Click any row to filter.
+- **API**: read-only HTTP API with API keys, for scripts and other apps. See
+  [docs/api.md](docs/api.md).
 - **Stack**: Go + DuckDB backend; TanStack Start (SPA mode) + Solid +
   shadcn-style components for the dashboard, embedded in the binary.
 

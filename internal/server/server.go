@@ -34,6 +34,8 @@ type Server struct {
 	// instead of Tracker. Used by `bun dev`, where the script is rebuilt live.
 	TrackerPath string
 	TrustProxy  bool
+
+	limits rateLimiter // per API key
 }
 
 func (s *Server) Handler() http.Handler {
@@ -58,6 +60,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/sites/{domain}/timeseries", s.private(s.timeseries))
 	mux.HandleFunc("GET /api/sites/{domain}/breakdown/{dim}", s.private(s.breakdown))
 	mux.HandleFunc("GET /api/sites/{domain}/realtime", s.private(s.realtime))
+	s.publicRoutes(mux)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 	})

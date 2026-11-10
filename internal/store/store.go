@@ -31,6 +31,9 @@ type Store struct {
 
 	mu    sync.RWMutex
 	sites map[string]Site // by domain
+
+	keysMu sync.RWMutex
+	keys   map[string]*APIKey // by hash
 }
 
 type Options struct {
@@ -70,12 +73,16 @@ func Open(path string, opts Options) (*Store, error) {
 		return nil, fmt.Errorf("open duckdb: %w", err)
 	}
 	db := sql.OpenDB(connector)
-	s := &Store{DB: db, sites: map[string]Site{}}
+	s := &Store{DB: db, sites: map[string]Site{}, keys: map[string]*APIKey{}}
 	if err := s.migrate(); err != nil {
 		db.Close()
 		return nil, err
 	}
 	if err := s.loadSites(); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := s.loadAPIKeys(); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -129,6 +136,19 @@ var migrations = [][]string{
 		`CREATE TABLE settings (
 			key   VARCHAR PRIMARY KEY,
 			value VARCHAR NOT NULL
+		)`,
+	},
+	{
+		// API keys for the public API. Only a SHA-256 hash of each key is
+		// stored; prefix is the start of the key, shown to tell keys apart.
+		`CREATE SEQUENCE api_keys_id_seq START 1`,
+		`CREATE TABLE api_keys (
+			id           INTEGER PRIMARY KEY DEFAULT nextval('api_keys_id_seq'),
+			name         VARCHAR NOT NULL,
+			prefix       VARCHAR NOT NULL,
+			hash         VARCHAR NOT NULL UNIQUE,
+			created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+			last_used_at TIMESTAMPTZ
 		)`,
 	},
 }

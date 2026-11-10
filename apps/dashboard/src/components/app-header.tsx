@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/solid-query";
 import { Link, useNavigate, useParams } from "@tanstack/solid-router";
-import { ChevronsUpDown, KeyRound, LogOut, Plus, Settings } from "lucide-solid";
+import { ChevronsUpDown, Code, KeyRound, LogOut, Plus, Settings } from "lucide-solid";
 import { createSignal, For, Show } from "solid-js";
 import { api } from "~/lib/api";
 import { AddSiteDialog } from "./add-site-dialog";
@@ -97,6 +97,9 @@ export function AppHeader() {
               <KeyRound class="size-3.5 text-muted-foreground" />
             </DropdownMenuTrigger>
             <DropdownMenuContent class="w-48">
+              <DropdownMenuItem onSelect={() => navigate({ to: "/api-keys" })}>
+                <Code /> API keys
+              </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => setChangingPassword(true)}>
                 <KeyRound /> Change password
               </DropdownMenuItem>
