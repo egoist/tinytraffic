@@ -1,6 +1,11 @@
-@import "tailwindcss";
+@import "tailwindcss" source(none);
 @import "tw-animate-css";
 @import "@fontsource-variable/inter";
+
+@source "./components";
+@source "./lib";
+@source "./routes";
+@source "./router.tsx";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
