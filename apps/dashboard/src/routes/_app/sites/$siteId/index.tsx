@@ -12,6 +12,7 @@ import { buttonVariants } from "~/components/ui/button";
 import { Card, CardContent, Surface } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
 import { api, type StatsParams } from "~/lib/api";
+import { useSignedIn } from "~/lib/auth";
 import { periodValues, type Period } from "~/lib/dims";
 import { t } from "~/lib/i18n";
 import { ready } from "~/lib/query";
@@ -47,6 +48,8 @@ function Dashboard() {
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const siteId = () => params().siteId;
+  // Signed-out viewers of a public dashboard see the stats only.
+  const signedIn = useSignedIn();
 
   const stats = createMemo<StatsParams>(() => ({
     period: search().period ?? "30d",
@@ -82,7 +85,7 @@ function Dashboard() {
   // L opens the live view (and closes it again from there).
   onMount(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey || e.key.toLowerCase() !== "l") return;
+      if (!signedIn() || e.metaKey || e.ctrlKey || e.altKey || e.key.toLowerCase() !== "l") return;
       if ((e.target as HTMLElement).closest("input, textarea, select, [contenteditable], [role=dialog]")) return;
       e.preventDefault();
       navigate({ to: "/sites/$siteId/live", params: { siteId: siteId() } });
@@ -99,14 +102,16 @@ function Dashboard() {
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div class="flex items-center gap-3">
           <Realtime site={siteId()} />
-          <Link
-            to="/sites/$siteId/live"
-            params={{ siteId: siteId() }}
-            class={buttonVariants({ variant: "outline", size: "sm" })}
-            title={t().dashboard.liveViewTitle}
-          >
-            <Earth class="text-muted-foreground" /> {t().dashboard.liveView}
-          </Link>
+          <Show when={signedIn()}>
+            <Link
+              to="/sites/$siteId/live"
+              params={{ siteId: siteId() }}
+              class={buttonVariants({ variant: "outline", size: "sm" })}
+              title={t().dashboard.liveViewTitle}
+            >
+              <Earth class="text-muted-foreground" /> {t().dashboard.liveView}
+            </Link>
+          </Show>
         </div>
         <PeriodPicker
           value={{ period: stats().period as Period, from: stats().from, to: stats().to }}
@@ -233,10 +238,13 @@ function Dashboard() {
           ]}
           empty={
             <>
-              {t().dashboard.noEvents}{" "}
-              <Link to="/sites/$siteId/settings" params={{ siteId: siteId() }} class="underline underline-offset-4 hover:text-foreground">
-                {t().dashboard.howToSend}
-              </Link>
+              {t().dashboard.noEvents}
+              <Show when={signedIn()}>
+                {" "}
+                <Link to="/sites/$siteId/settings" params={{ siteId: siteId() }} class="underline underline-offset-4 hover:text-foreground">
+                  {t().dashboard.howToSend}
+                </Link>
+              </Show>
             </>
           }
         />

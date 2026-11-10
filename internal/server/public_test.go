@@ -108,21 +108,26 @@ func TestPublicAPI(t *testing.T) {
 }
 
 func TestRateLimiter(t *testing.T) {
-	var l rateLimiter
+	var l rateLimiter[int32]
 	now := time.Now()
 	for i := 1; i <= rateLimit; i++ {
-		if left, _ := l.take(1, now); left != rateLimit-i {
+		if left, _ := l.take(1, rateLimit, now); left != rateLimit-i {
 			t.Fatalf("request %d: %d left", i, left)
 		}
 	}
-	if left, reset := l.take(1, now.Add(10*time.Second)); left >= 0 || reset != 50*time.Second {
+	if left, reset := l.take(1, rateLimit, now.Add(10*time.Second)); left >= 0 || reset != 50*time.Second {
 		t.Errorf("over limit: %d left, reset in %v", left, reset)
 	}
-	if left, _ := l.take(2, now); left != rateLimit-1 {
+	if left, _ := l.take(2, rateLimit, now); left != rateLimit-1 {
 		t.Errorf("other keys have their own budget: %d", left)
 	}
-	if left, _ := l.take(1, now.Add(rateWindow)); left != rateLimit-1 {
+	if left, _ := l.take(1, rateLimit, now.Add(rateWindow)); left != rateLimit-1 {
 		t.Errorf("after the window: %d", left)
+	}
+	// Finished windows are forgotten.
+	l.take(3, rateLimit, now.Add(3*rateWindow))
+	if len(l.windows) != 1 {
+		t.Errorf("%d windows kept, want only the current one", len(l.windows))
 	}
 }
 

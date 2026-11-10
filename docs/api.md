@@ -85,6 +85,7 @@ scripts: it never changes, while a domain can.
     "domain": "example.com",
     "timezone": "Asia/Singapore",
     "aliases": [],
+    "public": false,
     "created_at": "2026-11-10T10:20:57.79529Z",
     "visitors_24h": 1478,
     "sparkline": [88, 92, 95, "… 24 hourly values, oldest first"]
@@ -107,14 +108,16 @@ curl -X POST https://stats.example.com/api/v1/sites \
 ```
 
 ```json
-{ "id": 1, "domain": "example.com", "timezone": "Europe/Berlin", "aliases": [], "created_at": "2026-11-10T10:27:15.652313Z" }
+{ "id": 1, "domain": "example.com", "timezone": "Europe/Berlin", "aliases": [], "public": false, "created_at": "2026-11-10T10:27:15.652313Z" }
 ```
 
-`PATCH /api/v1/sites/{site}` changes the domain, the reporting timezone, or
-both: `{"domain": "new.com", "timezone": "Asia/Tokyo"}`. Stats are kept. The
-old domain is added to `aliases`: events sent to it still count for this
-site, and it still works in API paths. Returns `409` if another site uses the
-new domain.
+`PATCH /api/v1/sites/{site}` changes the domain, the reporting timezone,
+whether the stats are public, or any of them:
+`{"domain": "new.com", "timezone": "Asia/Tokyo", "public": true}`. Stats are
+kept. The old domain is added to `aliases`: events sent to it still count for
+this site, and it still works in API paths. Returns `409` if another site uses
+the new domain. A public site's dashboard (`/sites/{id}`) can be viewed by
+anyone, without signing in.
 
 `DELETE /api/v1/sites/{site}/aliases/{domain}` removes an old domain, so it
 stops recording to this site and can be used for a new one.

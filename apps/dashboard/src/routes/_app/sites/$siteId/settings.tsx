@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/solid-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
-import { ArrowLeft, CircleCheck, LoaderCircle } from "lucide-solid";
+import { ArrowLeft, CircleCheck, Globe, LoaderCircle, Lock } from "lucide-solid";
 import { createEffect, createSignal, For, Show } from "solid-js";
 import { CodeBlock, trackingSnippet } from "~/components/code-block";
 import { Button } from "~/components/ui/button";
@@ -59,6 +59,7 @@ function Settings() {
             <TrackingCard siteId={siteId()} domain={s().domain} hasData={s().visitors_24h > 0} />
             <DomainCard site={s()} />
             <TimezoneCard siteId={siteId()} timezone={s().timezone} />
+            <VisibilityCard site={s()} />
             <DangerCard siteId={siteId()} domain={s().domain} />
           </>
         )}
@@ -220,6 +221,42 @@ function TimezoneCard(props: { siteId: string; timezone: string }) {
             {save.isSuccess && tz() === props.timezone ? t().common.saved : t().common.save}
           </Button>
         </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+function VisibilityCard(props: { site: Site }) {
+  const qc = useQueryClient();
+  const toggle = useMutation(() => ({
+    mutationFn: () => api.updateSite(props.site.id, { public: !props.site.public }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["sites"] }),
+  }));
+  const link = () => `${location.origin}/sites/${props.site.id}`;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t().settings.visibilityTitle}</CardTitle>
+        <CardDescription>
+          {props.site.public ? t().settings.visibilityPublic : t().settings.visibilityPrivate}
+        </CardDescription>
+      </CardHeader>
+      <CardContent class="grid gap-4">
+        <Show when={props.site.public}>
+          <div class="grid gap-2">
+            <Label>{t().settings.publicLink}</Label>
+            <CodeBlock code={link()} />
+          </div>
+        </Show>
+        <div>
+          <Button variant="outline" disabled={toggle.isPending} onClick={() => toggle.mutate()}>
+            {props.site.public ? <Lock /> : <Globe />}
+            {props.site.public ? t().settings.makePrivate : t().settings.makePublic}
+          </Button>
+        </div>
+        <Show when={toggle.error}>
+          <p class="text-sm text-destructive">{errorMessage(toggle.error)}</p>
+        </Show>
       </CardContent>
     </Card>
   );

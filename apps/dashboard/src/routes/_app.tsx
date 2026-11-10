@@ -1,8 +1,11 @@
 import { createFileRoute, Outlet, useRouterState } from "@tanstack/solid-router";
 import { Show } from "solid-js";
 import { AppHeader } from "~/components/app-header";
+import { authQuery } from "~/lib/auth";
 
 export const Route = createFileRoute("/_app")({
+  // Known before the first render, so pages don't change shape once it loads.
+  loader: ({ context }) => context.queryClient.ensureQueryData(authQuery),
   component: AppLayout,
 });
 

@@ -20,7 +20,9 @@ type Site struct {
 	Timezone string `json:"timezone"`
 	// Aliases are the site's previous domains. Events sent to them still
 	// count, so a snippet that wasn't updated after a rename keeps working.
-	Aliases   []string  `json:"aliases"`
+	Aliases []string `json:"aliases"`
+	// Public sites' dashboards can be viewed without signing in.
+	Public    bool      `json:"public"`
 	CreatedAt time.Time `json:"created_at"`
 }
 

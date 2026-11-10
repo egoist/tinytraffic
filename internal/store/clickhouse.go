@@ -102,6 +102,7 @@ var clickHouseSchema = []string{
 	) ENGINE = MergeTree ORDER BY day TTL day + INTERVAL 3 DAY`,
 	// Columns added later go here as ADD COLUMN IF NOT EXISTS, so this list
 	// can run on every start.
+	`ALTER TABLE sites ADD COLUMN IF NOT EXISTS public UInt8 DEFAULT 0 AFTER timezone`,
 }
 
 // openClickHouse connects to the database in dsn, e.g.
@@ -169,7 +170,7 @@ func (m *clickhouseMeta) exec(query string, args ...any) error {
 
 func (m *clickhouseMeta) loadSites() (map[int32]Site, error) {
 	rows, err := m.db.Query(`
-SELECT id, argMax(domain, version), argMax(timezone, version), argMax(created_at, version)
+SELECT id, argMax(domain, version), argMax(timezone, version), argMax(public, version) = 1, argMax(created_at, version)
 FROM sites GROUP BY id HAVING argMax(deleted, version) = 0`)
 	if err != nil {
 		return nil, err
@@ -178,7 +179,7 @@ FROM sites GROUP BY id HAVING argMax(deleted, version) = 0`)
 	sites := map[int32]Site{}
 	for rows.Next() {
 		var site Site
-		if err := rows.Scan(&site.ID, &site.Domain, &site.Timezone, &site.CreatedAt); err != nil {
+		if err := rows.Scan(&site.ID, &site.Domain, &site.Timezone, &site.Public, &site.CreatedAt); err != nil {
 			return nil, err
 		}
 		site.Aliases = []string{}
@@ -198,8 +199,8 @@ GROUP BY domain HAVING argMax(deleted, version) = 0 ORDER BY domain`)
 }
 
 func (m *clickhouseMeta) putSite(site Site, deleted bool) error {
-	return m.exec(`INSERT INTO sites (id, domain, timezone, created_at, deleted, version) VALUES (?, ?, ?, ?, ?, ?)`,
-		site.ID, site.Domain, site.Timezone, site.CreatedAt, deleted, nextVersion())
+	return m.exec(`INSERT INTO sites (id, domain, timezone, public, created_at, deleted, version) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		site.ID, site.Domain, site.Timezone, site.Public, site.CreatedAt, deleted, nextVersion())
 }
 
 func (m *clickhouseMeta) putAlias(domain string, siteID int32, deleted bool) error {

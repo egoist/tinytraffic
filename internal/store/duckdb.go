@@ -121,6 +121,10 @@ var migrations = [][]string{
 		`ALTER TABLE events ADD COLUMN IF NOT EXISTS latitude FLOAT`,
 		`ALTER TABLE events ADD COLUMN IF NOT EXISTS longitude FLOAT`,
 	},
+	{
+		// Public sites' dashboards can be viewed without signing in.
+		`ALTER TABLE sites ADD COLUMN public BOOLEAN DEFAULT false`,
+	},
 }
 
 func migrateDuckDB(db *sql.DB) error {
@@ -159,7 +163,7 @@ type duckMeta struct{ db *sql.DB }
 func (m *duckMeta) close() error { return m.db.Close() }
 
 func (m *duckMeta) loadSites() (map[int32]Site, error) {
-	rows, err := m.db.Query(`SELECT id, domain, timezone, created_at FROM sites`)
+	rows, err := m.db.Query(`SELECT id, domain, timezone, coalesce(public, false), created_at FROM sites`)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +171,7 @@ func (m *duckMeta) loadSites() (map[int32]Site, error) {
 	sites := map[int32]Site{}
 	for rows.Next() {
 		var site Site
-		if err := rows.Scan(&site.ID, &site.Domain, &site.Timezone, &site.CreatedAt); err != nil {
+		if err := rows.Scan(&site.ID, &site.Domain, &site.Timezone, &site.Public, &site.CreatedAt); err != nil {
 			return nil, err
 		}
 		site.Aliases = []string{}
@@ -224,7 +228,7 @@ func (m *duckMeta) updateSite(old, next Site) error {
 			return err
 		}
 	}
-	if _, err := tx.Exec(`UPDATE sites SET domain = ?, timezone = ? WHERE id = ?`, next.Domain, next.Timezone, old.ID); err != nil {
+	if _, err := tx.Exec(`UPDATE sites SET domain = ?, timezone = ?, public = ? WHERE id = ?`, next.Domain, next.Timezone, next.Public, old.ID); err != nil {
 		return err
 	}
 	return tx.Commit()

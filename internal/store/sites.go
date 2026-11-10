@@ -92,10 +92,11 @@ func (s *Store) CreateSite(domain, timezone string) (Site, error) {
 	return site, nil
 }
 
-// SiteUpdate changes a site. Empty fields are left as they are.
+// SiteUpdate changes a site. Empty or nil fields are left as they are.
 type SiteUpdate struct {
 	Domain   string
 	Timezone string
+	Public   *bool
 }
 
 // UpdateSite applies u. A new domain keeps the old one as an alias. It
@@ -111,6 +112,9 @@ func (s *Store) UpdateSite(id int32, u SiteUpdate) (Site, error) {
 	next.Aliases = slices.Clone(site.Aliases)
 	if u.Timezone != "" {
 		next.Timezone = u.Timezone
+	}
+	if u.Public != nil {
+		next.Public = *u.Public
 	}
 	if d := NormalizeDomain(u.Domain); d != "" && d != site.Domain {
 		if owner, ok := s.SiteByDomain(d); ok && owner.ID != id {

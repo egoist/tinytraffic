@@ -26,6 +26,8 @@ export type Site = {
   timezone: string;
   /** Previous domains, still accepted from the tracker. */
   aliases: string[];
+  /** Anyone can view a public site's dashboard, without signing in. */
+  public: boolean;
   created_at: string;
 };
 
@@ -132,7 +134,8 @@ export const api = {
   sites: () => request<SiteWithStats[]>("/api/sites"),
   createSite: (domain: string, timezone: string) =>
     request<Site>("/api/sites", { method: "POST", json: { domain, timezone } }),
-  updateSite: (ref: string | number, patch: { domain?: string; timezone?: string }) =>
+  site: (ref: string | number) => request<Site>(site(ref)),
+  updateSite: (ref: string | number, patch: { domain?: string; timezone?: string; public?: boolean }) =>
     request<Site>(site(ref), { method: "PATCH", json: patch }),
   removeAlias: (ref: string | number, alias: string) =>
     request<Site>(`${site(ref)}/aliases/${encodeURIComponent(alias)}`, { method: "DELETE" }),

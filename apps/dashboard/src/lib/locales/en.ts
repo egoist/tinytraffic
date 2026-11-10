@@ -30,6 +30,7 @@ export const en = {
     apiKeys: "API keys",
     changePassword: "Change password",
     signOut: "Sign out",
+    signIn: "Sign in",
   },
 
   login: {
@@ -234,6 +235,12 @@ export const en = {
     timezoneTitle: "Reporting timezone",
     timezoneDescription: "Days and hours in your reports start and end in this timezone.",
     timezone: "Timezone",
+    visibilityTitle: "Visibility",
+    visibilityPrivate: "Only you can see this site's stats.",
+    visibilityPublic: "Anyone with the link can see this site's dashboard. Settings, the live view and your other sites stay private.",
+    makePublic: "Make stats public",
+    makePrivate: "Make stats private",
+    publicLink: "Public link",
     deleteTitle: "Delete site",
     deleteDescription: "Removes the site and all of its stats. This can't be undone.",
     deleteButton: (domain: string) => `Delete ${domain}`,

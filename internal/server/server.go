@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"mime"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"path"
@@ -36,7 +37,8 @@ type Server struct {
 	TrackerPath string
 	TrustProxy  bool
 
-	limits rateLimiter // per API key
+	limits  rateLimiter[int32]      // per API key
+	viewers rateLimiter[netip.Addr] // signed-out viewers of public dashboards
 }
 
 func (s *Server) Handler() http.Handler {
@@ -52,17 +54,19 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/auth/logout", s.logout)
 	mux.HandleFunc("POST /api/auth/password", s.private(s.changePassword))
 
-	mux.HandleFunc("GET /api/info", s.private(s.info))
+	mux.HandleFunc("GET /api/info", s.info)
 	mux.HandleFunc("GET /api/sites", s.private(s.listSites))
 	mux.HandleFunc("POST /api/sites", s.private(s.createSite))
 	// {site} is the site's ID or one of its domains.
+	mux.HandleFunc("GET /api/sites/{site}", s.viewable(s.getSite))
 	mux.HandleFunc("PATCH /api/sites/{site}", s.private(s.updateSite))
 	mux.HandleFunc("DELETE /api/sites/{site}", s.private(s.deleteSite))
 	mux.HandleFunc("DELETE /api/sites/{site}/aliases/{alias}", s.private(s.removeAlias))
-	mux.HandleFunc("GET /api/sites/{site}/aggregate", s.private(s.aggregate))
-	mux.HandleFunc("GET /api/sites/{site}/timeseries", s.private(s.timeseries))
-	mux.HandleFunc("GET /api/sites/{site}/breakdown/{dim}", s.private(s.breakdown))
-	mux.HandleFunc("GET /api/sites/{site}/realtime", s.private(s.realtime))
+	// The stats on a public site's dashboard are open to anyone.
+	mux.HandleFunc("GET /api/sites/{site}/aggregate", s.viewable(s.aggregate))
+	mux.HandleFunc("GET /api/sites/{site}/timeseries", s.viewable(s.timeseries))
+	mux.HandleFunc("GET /api/sites/{site}/breakdown/{dim}", s.viewable(s.breakdown))
+	mux.HandleFunc("GET /api/sites/{site}/realtime", s.viewable(s.realtime))
 	mux.HandleFunc("GET /api/sites/{site}/locations", s.private(s.locations))
 	mux.HandleFunc("GET /api/sites/{site}/live", s.private(s.live))
 	s.publicRoutes(mux)
@@ -109,6 +113,36 @@ func (s *Server) private(h http.HandlerFunc) http.HandlerFunc {
 		}
 		h(w, r)
 	}
+}
+
+// viewable lets anyone read a public site's stats, and requires a session
+// for the rest. A signed-out request for a site that isn't public is
+// unauthorized whether the site exists or not, so it reveals nothing.
+// Signed-out viewers are rate limited per IP.
+func (s *Server) viewable(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !s.Auth.Valid(r) {
+			site, ok := s.Store.LookupSite(r.PathValue("site"))
+			if !ok || !site.Public {
+				writeError(w, http.StatusUnauthorized, "unauthorized")
+				return
+			}
+			if !limited(w, &s.viewers, viewerKey(ingest.ClientIP(r, s.TrustProxy)), viewerRateLimit) {
+				return
+			}
+		}
+		h(w, r)
+	}
+}
+
+// viewerKey is the rate limit key for an IP. An IPv6 user usually has a
+// whole /64, so it counts as one.
+func viewerKey(ip netip.Addr) netip.Addr {
+	if ip.Is6() {
+		p, _ := ip.Prefix(64)
+		return p.Addr()
+	}
+	return ip
 }
 
 func isJSON(r *http.Request) bool {
@@ -186,7 +220,8 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
-// info describes the server setup the dashboard adapts to.
+// info describes the server setup the dashboard adapts to. Public
+// dashboards need it too, and it holds nothing private.
 func (s *Server) info(w http.ResponseWriter, r *http.Request) {
 	attr := s.Geo.Attribution()
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -228,6 +263,7 @@ func (s *Server) listSites(w http.ResponseWriter, r *http.Request) {
 type siteBody struct {
 	Domain   string `json:"domain"`
 	Timezone string `json:"timezone"`
+	Public   *bool  `json:"public"`
 }
 
 func (s *Server) createSite(w http.ResponseWriter, r *http.Request) {
@@ -269,6 +305,18 @@ func (s *Server) site(w http.ResponseWriter, r *http.Request) (store.Site, bool)
 	return site, ok
 }
 
+func (s *Server) getSite(w http.ResponseWriter, r *http.Request) {
+	site, ok := s.site(w, r)
+	if !ok {
+		return
+	}
+	// Visitors of a public dashboard don't need the site's old domains.
+	if !s.Auth.Valid(r) {
+		site.Aliases = []string{}
+	}
+	writeJSON(w, http.StatusOK, site)
+}
+
 func (s *Server) updateSite(w http.ResponseWriter, r *http.Request) {
 	site, ok := s.site(w, r)
 	if !ok {
@@ -278,8 +326,8 @@ func (s *Server) updateSite(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &body) {
 		return
 	}
-	if body.Domain == "" && body.Timezone == "" {
-		writeError(w, http.StatusBadRequest, "nothing to change: send a domain or timezone")
+	if body.Domain == "" && body.Timezone == "" && body.Public == nil {
+		writeError(w, http.StatusBadRequest, "nothing to change: send a domain, timezone or public")
 		return
 	}
 	domain := store.NormalizeDomain(body.Domain)
@@ -293,7 +341,7 @@ func (s *Server) updateSite(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	site, err := s.Store.UpdateSite(site.ID, store.SiteUpdate{Domain: domain, Timezone: body.Timezone})
+	site, err := s.Store.UpdateSite(site.ID, store.SiteUpdate{Domain: domain, Timezone: body.Timezone, Public: body.Public})
 	if errors.Is(err, store.ErrExists) {
 		writeError(w, http.StatusConflict, "another site uses this domain")
 		return
@@ -521,7 +569,7 @@ func (s *Server) serveApp(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, nextPath(r.URL.Query().Get("redirect")), http.StatusFound)
 			return
 		}
-	} else if !signedIn {
+	} else if !signedIn && !s.publicPage(p) {
 		target := "/login"
 		if r.URL.Path != "/" {
 			target += "?redirect=" + url.QueryEscape(r.URL.RequestURI())
@@ -538,6 +586,17 @@ func (s *Server) serveApp(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Write(shell)
+}
+
+// publicPage reports whether p (without its leading slash) is the dashboard
+// of a public site, which signed-out visitors may open.
+func (s *Server) publicPage(p string) bool {
+	ref, ok := strings.CutPrefix(p, "sites/")
+	if !ok || ref == "" || strings.Contains(ref, "/") {
+		return false
+	}
+	site, ok := s.Store.LookupSite(ref)
+	return ok && site.Public
 }
 
 // nextPath returns next if it is a path on this site, otherwise "/".

@@ -27,6 +27,7 @@ export const zh: Messages = {
     apiKeys: "API 密钥",
     changePassword: "修改密码",
     signOut: "退出登录",
+    signIn: "登录",
   },
 
   login: {
@@ -233,6 +234,12 @@ export const zh: Messages = {
     timezoneTitle: "报告时区",
     timezoneDescription: "报告中的日期和小时按此时区划分。",
     timezone: "时区",
+    visibilityTitle: "可见性",
+    visibilityPrivate: "只有你能查看此站点的统计数据。",
+    visibilityPublic: "任何拥有链接的人都能查看此站点的仪表盘。设置、实时视图和你的其他站点仍然是私密的。",
+    makePublic: "公开统计数据",
+    makePrivate: "设为私密",
+    publicLink: "公开链接",
     deleteTitle: "删除站点",
     deleteDescription: "删除该站点及其所有统计数据。此操作无法撤销。",
     deleteButton: (domain) => `删除 ${domain}`,

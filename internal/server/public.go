@@ -23,6 +23,9 @@ import (
 const (
 	rateLimit  = 600 // requests per key per window
 	rateWindow = time.Minute
+	// viewerRateLimit is for signed-out viewers of public dashboards, per IP
+	// (IPv6 per /64). A page load takes about ten requests.
+	viewerRateLimit = 300
 )
 
 func (s *Server) publicRoutes(mux *http.ServeMux) {
@@ -90,22 +93,33 @@ func (s *Server) public(scope string, h http.HandlerFunc) http.HandlerFunc {
 			writeError(w, http.StatusForbidden, "this API key is read-only")
 			return
 		}
-		remaining, retryAfter := s.limits.take(key.ID, time.Now())
-		w.Header().Set("X-RateLimit-Limit", strconv.Itoa(rateLimit))
-		w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(max(remaining, 0)))
-		if remaining < 0 {
-			w.Header().Set("Retry-After", strconv.Itoa(int(retryAfter.Seconds())+1))
-			writeError(w, http.StatusTooManyRequests, "rate limit exceeded")
+		if !limited(w, &s.limits, key.ID, rateLimit) {
 			return
 		}
 		h(w, r)
 	}
 }
 
-// rateLimiter is a fixed-window counter per API key.
-type rateLimiter struct {
+// limited counts a request against key's budget and sets the rate limit
+// headers. Over the limit, it answers 429 and returns false.
+func limited[K comparable](w http.ResponseWriter, l *rateLimiter[K], key K, limit int) bool {
+	remaining, retryAfter := l.take(key, limit, time.Now())
+	w.Header().Set("X-RateLimit-Limit", strconv.Itoa(limit))
+	w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(max(remaining, 0)))
+	if remaining < 0 {
+		w.Header().Set("Retry-After", strconv.Itoa(int(retryAfter.Seconds())+1))
+		writeError(w, http.StatusTooManyRequests, "rate limit exceeded")
+		return false
+	}
+	return true
+}
+
+// rateLimiter is a fixed-window counter per key: an API key, or a viewer's
+// IP address.
+type rateLimiter[K comparable] struct {
 	mu      sync.Mutex
-	windows map[int32]*rateWindowState
+	windows map[K]*rateWindowState
+	swept   time.Time
 }
 
 type rateWindowState struct {
@@ -113,21 +127,30 @@ type rateWindowState struct {
 	count int
 }
 
-// take records a request and returns how many remain in the window
+// take records a request and returns how many of limit remain in the window
 // (negative when over the limit) and when the window resets.
-func (l *rateLimiter) take(id int32, now time.Time) (remaining int, reset time.Duration) {
+func (l *rateLimiter[K]) take(key K, limit int, now time.Time) (remaining int, reset time.Duration) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.windows == nil {
-		l.windows = map[int32]*rateWindowState{}
+		l.windows = map[K]*rateWindowState{}
 	}
-	w, ok := l.windows[id]
+	// Forget finished windows now and then, so passing IPs don't pile up.
+	if now.Sub(l.swept) >= rateWindow {
+		for k, w := range l.windows {
+			if now.Sub(w.start) >= rateWindow {
+				delete(l.windows, k)
+			}
+		}
+		l.swept = now
+	}
+	w, ok := l.windows[key]
 	if !ok || now.Sub(w.start) >= rateWindow {
 		w = &rateWindowState{start: now}
-		l.windows[id] = w
+		l.windows[key] = w
 	}
 	w.count++
-	return rateLimit - w.count, rateWindow - now.Sub(w.start)
+	return limit - w.count, rateWindow - now.Sub(w.start)
 }
 
 // --- key management ---

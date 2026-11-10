@@ -50,11 +50,12 @@ func testRenameSite(t *testing.T, open func() (*Store, error)) {
 	}
 
 	// Renaming back swaps the domain and the alias.
-	a, err = st.UpdateSite(a.ID, SiteUpdate{Domain: "old.com", Timezone: "Asia/Tokyo"})
+	yes := true
+	a, err = st.UpdateSite(a.ID, SiteUpdate{Domain: "old.com", Timezone: "Asia/Tokyo", Public: &yes})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if a.Domain != "old.com" || !slices.Equal(a.Aliases, []string{"new.com"}) || a.Timezone != "Asia/Tokyo" {
+	if a.Domain != "old.com" || !slices.Equal(a.Aliases, []string{"new.com"}) || a.Timezone != "Asia/Tokyo" || !a.Public {
 		t.Fatalf("after renaming back: %+v", a)
 	}
 
@@ -63,7 +64,7 @@ func testRenameSite(t *testing.T, open func() (*Store, error)) {
 	if st, err = open(); err != nil {
 		t.Fatal(err)
 	}
-	if got, ok := st.SiteByDomain("new.com"); !ok || got.Domain != "old.com" || got.Timezone != "Asia/Tokyo" {
+	if got, ok := st.SiteByDomain("new.com"); !ok || got.Domain != "old.com" || got.Timezone != "Asia/Tokyo" || !got.Public {
 		t.Errorf("after reopen: %+v, %v", got, ok)
 	}
 

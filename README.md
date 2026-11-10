@@ -12,7 +12,9 @@ DuckDB file, no cookies.
   dropped.
 - **Dashboard**: visitors, visits, pageviews, bounce rate and visit duration
   over time, plus sources, referrers, pages, locations, devices and goals.
-  Click any row to filter. Light and dark themes, works on phones.
+  Click any row to filter. Light and dark themes, works on phones. Make a
+  site's stats public to share its dashboard with anyone, no sign-in needed
+  (rate limited to 300 requests a minute per IP).
 - **API**: API keys for scripts and other apps. Read stats, manage sites, and
   send events from your server. See [docs/api.md](docs/api.md).
 - **Stack**: Go + DuckDB backend. The dashboard is TanStack Start (SPA mode)
@@ -30,7 +32,8 @@ docker run -d --name tinytraffic -p 8080:8080 -v tinytraffic:/data \
 Behind a reverse proxy (Traefik, Caddy, nginx or Dokploy), add
 `-e TT_TRUST_PROXY=true` and drop `-p 8080:8080`, so the proxy is the only way
 in. Visitors are then located by their real IP. Without the flag, every visitor
-appears to come from the proxy and shows as "Unknown". In Dokploy, add
+appears to come from the proxy and shows as "Unknown", and viewers of public
+dashboards share one rate limit. In Dokploy, add
 `TT_TRUST_PROXY=true` under the app's Environment tab.
 
 Or from source. You need [Go](https://go.dev) 1.26+, [Bun](https://bun.sh)
