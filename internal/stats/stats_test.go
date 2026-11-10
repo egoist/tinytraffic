@@ -44,7 +44,7 @@ func TestTimeseriesBucketsMatchICU(t *testing.T) {
 						VisitorID: uint64(i), SessionID: uint64(i),
 					})
 				}
-				if err := store.InsertEvents(context.Background(), st.DB, events); err != nil {
+				if err := st.Events.Insert(context.Background(), events); err != nil {
 					t.Fatal(err)
 				}
 
@@ -52,7 +52,7 @@ func TestTimeseriesBucketsMatchICU(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				points, err := Timeseries(context.Background(), st.DB, q)
+				points, err := Timeseries(context.Background(), st.Events, q)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -106,14 +106,14 @@ func TestFiltersAndBreakdown(t *testing.T) {
 		ev(2, "/blog/b", "", time.Hour),
 		ev(3, "/", "Twitter", time.Hour),
 	}
-	if err := store.InsertEvents(context.Background(), st.DB, events); err != nil {
+	if err := st.Events.Insert(context.Background(), events); err != nil {
 		t.Fatal(err)
 	}
 	q, err := ParseQuery(site, url.Values{"period": {"7d"}, "f": {"page:/blog/*"}}, now, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	agg, err := Aggregate(context.Background(), st.DB, q, now)
+	agg, err := Aggregate(context.Background(), st.Events, q, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,14 +122,14 @@ func TestFiltersAndBreakdown(t *testing.T) {
 	}
 
 	q, _ = ParseQuery(site, url.Values{"period": {"7d"}}, now, nil)
-	res, err := Breakdown(context.Background(), st.DB, q, "entry_page", 10)
+	res, err := Breakdown(context.Background(), st.Events, q, "entry_page", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(res.Rows) != 2 || res.Rows[0].Value != "/" || res.Rows[0].Visitors != 2 {
 		t.Errorf("entry pages: got %+v", res.Rows)
 	}
-	agg, _ = Aggregate(context.Background(), st.DB, q, now)
+	agg, _ = Aggregate(context.Background(), st.Events, q, now)
 	if agg.Current.Visits != 3 || int(agg.Current.BounceRate) != 66 {
 		t.Errorf("aggregate: got %+v", agg.Current)
 	}
@@ -144,11 +144,11 @@ func TestReferrerDomainsAndLinks(t *testing.T) {
 		events = append(events, store.Event{Timestamp: now.Add(-time.Hour), SiteID: site.ID, Name: "pageview",
 			Pathname: "/", Referrer: ref, VisitorID: uint64(i), SessionID: uint64(i)})
 	}
-	if err := store.InsertEvents(context.Background(), st.DB, events); err != nil {
+	if err := st.Events.Insert(context.Background(), events); err != nil {
 		t.Fatal(err)
 	}
 	q, _ := ParseQuery(site, url.Values{"period": {"7d"}}, now, nil)
-	res, err := Breakdown(context.Background(), st.DB, q, "referrer", 10)
+	res, err := Breakdown(context.Background(), st.Events, q, "referrer", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +162,7 @@ func TestReferrerDomainsAndLinks(t *testing.T) {
 	}
 
 	q, _ = ParseQuery(site, url.Values{"period": {"7d"}, "f": {"referrer:someblog.dev"}}, now, nil)
-	res, err = Breakdown(context.Background(), st.DB, q, "referrer_url", 10)
+	res, err = Breakdown(context.Background(), st.Events, q, "referrer_url", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,13 +180,13 @@ func TestLocations(t *testing.T) {
 		return store.Event{Timestamp: now.Add(-time.Hour), SiteID: site.ID, Name: "pageview", Pathname: "/",
 			Country: "XX", City: city, HasLocation: has, Latitude: lat, Longitude: lon, VisitorID: v, SessionID: v}
 	}
-	store.InsertEvents(context.Background(), st.DB, []store.Event{
+	st.Events.Insert(context.Background(), []store.Event{
 		ev(1, "London", 51.51, -0.13, true), ev(2, "London", 51.51, -0.13, true), ev(2, "London", 51.51, -0.13, true),
 		ev(3, "Paris", 48.86, 2.35, true),
 		ev(4, "", 0, 0, false), // unknown location is left out
 	})
 	q, _ := ParseQuery(site, url.Values{"period": {"7d"}}, now, nil)
-	points, err := Locations(context.Background(), st.DB, q, 10)
+	points, err := Locations(context.Background(), st.Events, q, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +205,7 @@ func TestLive(t *testing.T) {
 			VisitorID: session, SessionID: session, ReferrerSource: "Google",
 			Country: "DE", City: "Berlin", HasLocation: session == 1, Latitude: 52.52, Longitude: 13.4}
 	}
-	store.InsertEvents(context.Background(), st.DB, []store.Event{
+	st.Events.Insert(context.Background(), []store.Event{
 		// Started 20 minutes ago, still browsing.
 		ev(1, 20*time.Minute, "pageview", "/"),
 		ev(1, 2*time.Minute, "pageview", "/pricing"),
@@ -215,7 +215,7 @@ func TestLive(t *testing.T) {
 		// Left 10 minutes ago.
 		ev(3, 10*time.Minute, "pageview", "/"),
 	})
-	res, err := Live(context.Background(), st.DB, site.ID, now, 100)
+	res, err := Live(context.Background(), st.Events, site.ID, now, 100)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -50,6 +50,15 @@ var columns = map[string]string{
 	"device":       "device",
 }
 
+// column returns the SQL for a filter/breakdown dimension.
+func column(b store.Backend, dim string) (string, bool) {
+	if dim == "referrer" && b == store.ClickHouse {
+		return "splitByChar('/', referrer)[1]", true
+	}
+	col, ok := columns[dim]
+	return col, ok
+}
+
 // Session-level dimensions, resolved with subqueries.
 var sessionDims = map[string]bool{"entry_page": true, "exit_page": true, "event": true}
 
@@ -153,16 +162,17 @@ func (q Query) clampedEnd(now time.Time) time.Time {
 }
 
 // where builds the WHERE clause for the query's range and filters.
-func (q Query) where(start, end time.Time) (string, []any) {
+func (q Query) where(b store.Backend, start, end time.Time) (string, []any) {
 	conds := []string{"site_id = ?", "ts >= ?", "ts < ?"}
 	args := []any{q.Site.ID, start.UTC(), end.UTC()}
 	for _, f := range q.Filters {
-		match, arg := matcher(f.Value)
+		match, arg := matcher(b, f.Value)
 		switch f.Dim {
 		case "entry_page", "exit_page":
-			fn := "arg_min"
+			// Both databases know argMin/argMax.
+			fn := "argMin"
 			if f.Dim == "exit_page" {
-				fn = "arg_max"
+				fn = "argMax"
 			}
 			conds = append(conds, fmt.Sprintf(
 				`session_id IN (SELECT session_id FROM events WHERE site_id = ? AND ts >= ? AND ts < ? AND name = 'pageview' GROUP BY session_id HAVING %s(pathname, ts) %s)`,
@@ -173,7 +183,8 @@ func (q Query) where(start, end time.Time) (string, []any) {
 				`session_id IN (SELECT session_id FROM events WHERE site_id = ? AND ts >= ? AND ts < ? AND name %s)`, match))
 			args = append(args, q.Site.ID, start.UTC(), end.UTC(), arg)
 		default:
-			conds = append(conds, columns[f.Dim]+" "+match)
+			col, _ := column(b, f.Dim)
+			conds = append(conds, col+" "+match)
 			args = append(args, arg)
 		}
 	}
@@ -181,10 +192,14 @@ func (q Query) where(start, end time.Time) (string, []any) {
 }
 
 // matcher supports exact values and * wildcards (e.g. /blog/*).
-func matcher(value string) (string, any) {
+func matcher(b store.Backend, value string) (string, any) {
 	if !strings.Contains(value, "*") {
 		return "= ?", value
 	}
 	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`, `*`, `%`)
+	if b == store.ClickHouse {
+		// ClickHouse has no ESCAPE clause; backslash is its escape character.
+		return `LIKE ?`, r.Replace(value)
+	}
 	return `LIKE ? ESCAPE '\'`, r.Replace(value)
 }

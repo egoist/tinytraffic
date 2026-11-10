@@ -218,16 +218,22 @@ func (s *Store) DeleteSite(id int32) error {
 	if _, ok := s.SiteByID(id); !ok {
 		return ErrNotFound
 	}
+	stmts := []string{
+		`DELETE FROM site_aliases WHERE site_id = ?`,
+		`DELETE FROM sites WHERE id = ?`,
+	}
+	if s.Events.Backend == DuckDB {
+		stmts = append([]string{`DELETE FROM events WHERE site_id = ?`}, stmts...)
+	} else if _, err := s.Events.DB.Exec(`DELETE FROM events WHERE site_id = ?`, id); err != nil {
+		// Events first: if that fails, the site is still there to retry.
+		return err
+	}
 	tx, err := s.DB.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	for _, stmt := range []string{
-		`DELETE FROM events WHERE site_id = ?`,
-		`DELETE FROM site_aliases WHERE site_id = ?`,
-		`DELETE FROM sites WHERE id = ?`,
-	} {
+	for _, stmt := range stmts {
 		if _, err := tx.Exec(stmt, id); err != nil {
 			return err
 		}

@@ -1,5 +1,6 @@
-// Package store owns the DuckDB database: schema, sites, settings and the
-// batched event writer.
+// Package store owns the databases: DuckDB for sites, settings, API keys and
+// salts, and the events table in DuckDB or ClickHouse, with its batched
+// writer.
 package store
 
 import (
@@ -30,6 +31,8 @@ var ErrExists = errors.New("already exists")
 
 type Store struct {
 	DB *sql.DB
+	// Events is the events table, in DB unless ClickHouse is configured.
+	Events *Events
 
 	mu       sync.RWMutex
 	sites    map[int32]Site
@@ -46,6 +49,9 @@ type Options struct {
 	// MemoryLimit caps DuckDB's memory use, e.g. "1GB". DuckDB's own default
 	// is 80% of system RAM, which is too greedy for a small VPS.
 	MemoryLimit string
+	// ClickHouseURL, when set, keeps events in ClickHouse instead of DuckDB,
+	// e.g. clickhouse://user:password@host:9000/tinytraffic.
+	ClickHouseURL string
 }
 
 var memoryLimitPattern = regexp.MustCompile(`^(?i)\d+(\.\d+)?\s*(B|KB|MB|GB|TB|KiB|MiB|GiB|TiB)$`)
@@ -79,23 +85,38 @@ func Open(path string, opts Options) (*Store, error) {
 		return nil, fmt.Errorf("open duckdb: %w", err)
 	}
 	db := sql.OpenDB(connector)
-	s := &Store{DB: db, sites: map[int32]Site{}, byDomain: map[string]int32{}, keys: map[string]*APIKey{}}
-	if err := s.migrate(); err != nil {
-		db.Close()
-		return nil, err
-	}
-	if err := s.loadSites(); err != nil {
-		db.Close()
-		return nil, err
-	}
-	if err := s.loadAPIKeys(); err != nil {
-		db.Close()
+	s := &Store{DB: db, Events: &Events{DB: db, Backend: DuckDB},
+		sites: map[int32]Site{}, byDomain: map[string]int32{}, keys: map[string]*APIKey{}}
+	if err := s.open(opts); err != nil {
+		s.Close()
 		return nil, err
 	}
 	return s, nil
 }
 
-func (s *Store) Close() error { return s.DB.Close() }
+func (s *Store) open(opts Options) error {
+	if err := s.migrate(); err != nil {
+		return err
+	}
+	if opts.ClickHouseURL != "" {
+		ch, err := openClickHouse(opts.ClickHouseURL)
+		if err != nil {
+			return err
+		}
+		s.Events = &Events{DB: ch, Backend: ClickHouse}
+	}
+	if err := s.loadSites(); err != nil {
+		return err
+	}
+	return s.loadAPIKeys()
+}
+
+func (s *Store) Close() error {
+	if s.Events.DB != s.DB {
+		s.Events.DB.Close()
+	}
+	return s.DB.Close()
+}
 
 // Each migration is a list of statements, applied once and in order.
 var migrations = [][]string{

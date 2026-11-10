@@ -50,11 +50,10 @@ const (
 	flushInterval = time.Second
 )
 
-// Writer buffers events in memory and bulk-inserts them with the DuckDB
-// appender, so a traffic spike costs one insert per second instead of one per
-// request.
+// Writer buffers events in memory and bulk-inserts them, so a traffic spike
+// costs one insert per second instead of one per request.
 type Writer struct {
-	db  *sql.DB
+	ev  *Events
 	log *slog.Logger
 	ch  chan Event
 
@@ -64,8 +63,8 @@ type Writer struct {
 	dropped atomic.Uint64
 }
 
-func NewWriter(db *sql.DB, log *slog.Logger) *Writer {
-	w := &Writer{db: db, log: log, ch: make(chan Event, bufferSize), done: make(chan struct{})}
+func NewWriter(ev *Events, log *slog.Logger) *Writer {
+	w := &Writer{ev: ev, log: log, ch: make(chan Event, bufferSize), done: make(chan struct{})}
 	go w.run()
 	return w
 }
@@ -109,7 +108,7 @@ func (w *Writer) run() {
 		if len(batch) == 0 {
 			return
 		}
-		if err := w.insert(batch); err != nil {
+		if err := w.ev.Insert(context.Background(), batch); err != nil {
 			w.log.Error("insert events", "count", len(batch), "err", err)
 		}
 		batch = batch[:0]
@@ -131,10 +130,6 @@ func (w *Writer) run() {
 	}
 }
 
-func (w *Writer) insert(batch []Event) error {
-	return InsertEvents(context.Background(), w.db, batch)
-}
-
 // eventColumns are named for the appender, since columns added by later
 // migrations sit at the end of older tables but inline in newer ones.
 var eventColumns = []string{
@@ -146,8 +141,8 @@ var eventColumns = []string{
 	"screen_width", "props", "latitude", "longitude",
 }
 
-// InsertEvents appends events in one batch.
-func InsertEvents(ctx context.Context, db *sql.DB, events []Event) error {
+// insertDuckDB appends events with the DuckDB appender.
+func insertDuckDB(ctx context.Context, db *sql.DB, events []Event) error {
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		return err

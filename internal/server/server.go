@@ -206,7 +206,7 @@ type siteResponse struct {
 }
 
 func (s *Server) listSites(w http.ResponseWriter, r *http.Request) {
-	overview, err := stats.Overview(r.Context(), s.Store.DB, time.Now())
+	overview, err := stats.Overview(r.Context(), s.Store.Events, time.Now())
 	if err != nil {
 		s.serverError(w, err)
 		return
@@ -351,7 +351,7 @@ func (s *Server) query(w http.ResponseWriter, r *http.Request) (stats.Query, boo
 		return stats.Query{}, false
 	}
 	q, err := stats.ParseQuery(site, r.URL.Query(), time.Now(), func() (time.Time, bool) {
-		return stats.FirstEvent(r.Context(), s.Store.DB, site.ID)
+		return stats.FirstEvent(r.Context(), s.Store.Events, site.ID)
 	})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -385,7 +385,7 @@ func (s *Server) aggregate(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	res, err := stats.Aggregate(r.Context(), s.Store.DB, q, time.Now())
+	res, err := stats.Aggregate(r.Context(), s.Store.Events, q, time.Now())
 	if err != nil {
 		s.serverError(w, err)
 		return
@@ -398,7 +398,7 @@ func (s *Server) timeseries(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	points, err := stats.Timeseries(r.Context(), s.Store.DB, q)
+	points, err := stats.Timeseries(r.Context(), s.Store.Events, q)
 	if err != nil {
 		s.serverError(w, err)
 		return
@@ -415,7 +415,7 @@ func (s *Server) breakdown(w http.ResponseWriter, r *http.Request) {
 	if limit <= 0 || limit > 1000 {
 		limit = 10
 	}
-	res, err := stats.Breakdown(r.Context(), s.Store.DB, q, r.PathValue("dim"), limit)
+	res, err := stats.Breakdown(r.Context(), s.Store.Events, q, r.PathValue("dim"), limit)
 	if err != nil {
 		if strings.HasPrefix(err.Error(), "unknown dimension") {
 			writeError(w, http.StatusBadRequest, err.Error())
@@ -432,7 +432,7 @@ func (s *Server) realtime(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	n, err := stats.Realtime(r.Context(), s.Store.DB, site.ID, time.Now())
+	n, err := stats.Realtime(r.Context(), s.Store.Events, site.ID, time.Now())
 	if err != nil {
 		s.serverError(w, err)
 		return
@@ -449,7 +449,7 @@ func (s *Server) locations(w http.ResponseWriter, r *http.Request) {
 	if limit <= 0 || limit > 1000 {
 		limit = 200
 	}
-	points, err := stats.Locations(r.Context(), s.Store.DB, q, limit)
+	points, err := stats.Locations(r.Context(), s.Store.Events, q, limit)
 	if err != nil {
 		s.serverError(w, err)
 		return
@@ -462,7 +462,7 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	res, err := stats.Live(r.Context(), s.Store.DB, site.ID, time.Now(), 300)
+	res, err := stats.Live(r.Context(), s.Store.Events, site.ID, time.Now(), 300)
 	if err != nil {
 		s.serverError(w, err)
 		return

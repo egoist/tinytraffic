@@ -86,6 +86,7 @@ To send events from a backend instead, see
 | `-addr` | `TT_ADDR` | `:8080` | Listen address |
 | `-data` | `TT_DATA_DIR` | `./data` | Holds `tinytraffic.duckdb` |
 | `-memory-limit` | `TT_MEMORY_LIMIT` | `1GB` | DuckDB memory cap |
+| `-clickhouse` | `TT_CLICKHOUSE_URL` | | Store events in ClickHouse, see [ClickHouse](#clickhouse) |
 | `-geoip` | `TT_GEOIP_DB` | see below | Comma-separated `.mmdb` files (MaxMind or DB-IP format, country or city) |
 | `-trust-proxy` | `TT_TRUST_PROXY=true` | off | Read client IPs from `CF-Connecting-IP` / `X-Real-IP` / `X-Forwarded-For`. Enable only behind a reverse proxy |
 | | `TT_PASSWORD` | | Sets the password on first start, so nobody else can claim the setup screen |
@@ -101,6 +102,35 @@ the credit line the database's license asks for.
 
 To refresh it: `bun update @ip-location-db/dbip-city-mmdb`.
 
+### ClickHouse
+
+Events can live in [ClickHouse](https://clickhouse.com) instead of DuckDB,
+for more traffic than one DuckDB file handles comfortably. Sites, settings,
+API keys and the daily salts stay in the DuckDB file either way, so keep the
+data directory.
+
+```sh
+tinytraffic -clickhouse clickhouse://user:password@host:9000/tinytraffic
+```
+
+The URL is clickhouse-go's DSN: `clickhouse://` for the native protocol
+(port 9000) or `http://` / `https://` (port 8123). The database must exist;
+tinytraffic creates the `events` table in it on start (a `MergeTree`
+partitioned by month, ordered by `(site_id, toDate(ts), visitor_id)`).
+
+To move existing stats over, stop the server and run:
+
+```sh
+tinytraffic migrate-clickhouse -clickhouse clickhouse://user:password@host:9000/tinytraffic
+```
+
+It copies each site's events older than the site's first event in
+ClickHouse, so it's safe to run after the server already started writing to
+ClickHouse, and to run again after an interruption: it resumes and never
+copies an event twice. The events are left in DuckDB, so you can switch back
+by dropping the flag (stats recorded in ClickHouse meanwhile aren't copied
+back).
+
 ### Commands
 
 These need the server stopped, since DuckDB allows one process per database
@@ -109,6 +139,7 @@ file:
 ```sh
 tinytraffic password                    # set a new dashboard password
 tinytraffic seed -days 90 demo.local    # fill a site with demo traffic (-reset replaces it)
+tinytraffic migrate-clickhouse          # copy events to ClickHouse (see above)
 ```
 
 With Docker, run them against the same volume:
@@ -149,6 +180,7 @@ with the DuckDB CLI:
 bun run demo         # optional: a demo site with 90 days of fake traffic
 bun dev              # everything; open http://localhost:3000
 bun run test         # Go tests
+TT_TEST_CLICKHOUSE=clickhouse://localhost:9000 bun run test   # also against ClickHouse
 bun run typecheck
 ```
 
@@ -172,8 +204,8 @@ Layout:
 ```
 cmd/tinytraffic      entrypoint and subcommands
 internal/ingest      /api/event: bot filter, UA/geo/referrer parsing, visitor hash, sessions
-internal/store       DuckDB schema, sites, API keys, batched event writer
-internal/stats       dashboard queries
+internal/store       DuckDB schema, sites, API keys, events in DuckDB or ClickHouse, batched writer
+internal/stats       dashboard queries (DuckDB and ClickHouse SQL)
 internal/server      HTTP routes: dashboard API, public API (/api/v1), auth, static files
 internal/seed        demo traffic generator
 web/                 embedded build output (dashboard + tracker)
@@ -204,7 +236,6 @@ Go, instead of `date_trunc`/`timezone()`. DuckDB's ICU timezone functions were
 about 20× slower than the scan itself. A test checks the results against them
 across DST changes.
 
-If you outgrow one machine: the storage layer is the writer plus a handful of
-queries in `internal/stats`, written to translate to ClickHouse (`MergeTree`
-ordered by `(site_id, toDate(ts), visitor_id)`), with stateless ingest nodes in
-front.
+If you outgrow one machine, move events to [ClickHouse](#clickhouse). The
+tinytraffic process still keeps its small DuckDB file and the session state
+in memory, so run one instance.
