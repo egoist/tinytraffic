@@ -102,6 +102,9 @@ function Login() {
         <div class="mt-6 flex justify-center">
           <LanguageToggle />
         </div>
+        <p class="mt-4 text-center text-xs text-muted-foreground">
+          commit {(import.meta.env.VITE_GIT_COMMIT ?? "dev").slice(0, 7)}
+        </p>
       </div>
     </main>
   );

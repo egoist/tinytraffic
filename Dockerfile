@@ -14,6 +14,8 @@ RUN bun install --frozen-lockfile \
 COPY apps apps
 COPY packages packages
 COPY web web
+ARG GIT_COMMIT=unknown
+ENV VITE_GIT_COMMIT=$GIT_COMMIT
 RUN bun --bun run --filter tracker build && bun --bun run --filter dashboard build
 
 # 2. Go binary. DuckDB is a C++ library, so this needs cgo.
