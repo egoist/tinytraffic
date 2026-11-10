@@ -132,6 +132,13 @@ amd64 and arm64. Pushes to `main` publish `:main`; version tags (`v1.2.3`)
 publish `:1.2.3`, `:1.2` and `:latest`. Data lives in the `/data` volume. To
 build the image yourself: `docker build -t tinytraffic .`.
 
+**Dokploy and Docker Swarm**: the database file is locked by one process at a
+time, so the new container can't open `/data` while the old one still runs.
+Dokploy updates services start-first by default, which makes the new container
+fail with a DuckDB lock error, yet Dokploy still reports the deploy as done. In
+the app's Swarm settings, set the Update Config and Rollback Config order to
+`stop-first`. Each deploy then has a short outage.
+
 **Backups**: stop the server and copy the data directory, or export to Parquet
 with the DuckDB CLI:
 `duckdb data/tinytraffic.duckdb "EXPORT DATABASE 'backup' (FORMAT parquet)"`.
