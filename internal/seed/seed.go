@@ -96,7 +96,7 @@ func Run(ctx context.Context, db *store.Store, site store.Site, days, visitorsPe
 		if len(batch) == 0 {
 			return nil
 		}
-		err := store.InsertEvents(ctx, db.DB, batch)
+		err := db.Events.Insert(ctx, batch)
 		total += len(batch)
 		batch = batch[:0]
 		return err

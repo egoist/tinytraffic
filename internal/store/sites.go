@@ -19,52 +19,6 @@ func NormalizeDomain(d string) string {
 	return strings.TrimPrefix(d, "www.")
 }
 
-func (s *Store) loadSites() error {
-	rows, err := s.DB.Query(`SELECT id, domain, timezone, created_at FROM sites`)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	sites := map[int32]Site{}
-	for rows.Next() {
-		var site Site
-		if err := rows.Scan(&site.ID, &site.Domain, &site.Timezone, &site.CreatedAt); err != nil {
-			return err
-		}
-		site.Aliases = []string{}
-		sites[site.ID] = site
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-
-	rows, err = s.DB.Query(`SELECT domain, site_id FROM site_aliases ORDER BY domain`)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var domain string
-		var id int32
-		if err := rows.Scan(&domain, &id); err != nil {
-			return err
-		}
-		if site, ok := sites[id]; ok {
-			site.Aliases = append(site.Aliases, domain)
-			sites[id] = site
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-
-	s.mu.Lock()
-	s.sites = sites
-	s.reindexLocked()
-	s.mu.Unlock()
-	return nil
-}
-
 // reindexLocked rebuilds the domain lookup. Callers hold s.mu.
 func (s *Store) reindexLocked() {
 	s.byDomain = make(map[string]int32, len(s.sites))
@@ -130,11 +84,7 @@ func (s *Store) CreateSite(domain, timezone string) (Site, error) {
 	if _, ok := s.SiteByDomain(domain); ok {
 		return Site{}, ErrExists
 	}
-	site := Site{Domain: domain, Timezone: timezone, Aliases: []string{}}
-	err := s.DB.QueryRow(
-		`INSERT INTO sites (domain, timezone) VALUES (?, ?) RETURNING id, created_at`,
-		domain, timezone,
-	).Scan(&site.ID, &site.CreatedAt)
+	site, err := s.meta.createSite(domain, timezone)
 	if err != nil {
 		return Site{}, err
 	}
@@ -172,23 +122,7 @@ func (s *Store) UpdateSite(id int32, u SiteUpdate) (Site, error) {
 		slices.Sort(next.Aliases)
 	}
 
-	tx, err := s.DB.Begin()
-	if err != nil {
-		return Site{}, err
-	}
-	defer tx.Rollback()
-	if next.Domain != site.Domain {
-		if _, err := tx.Exec(`DELETE FROM site_aliases WHERE domain = ?`, next.Domain); err != nil {
-			return Site{}, err
-		}
-		if _, err := tx.Exec(`INSERT INTO site_aliases (domain, site_id) VALUES (?, ?)`, site.Domain, id); err != nil {
-			return Site{}, err
-		}
-	}
-	if _, err := tx.Exec(`UPDATE sites SET domain = ?, timezone = ? WHERE id = ?`, next.Domain, next.Timezone, id); err != nil {
-		return Site{}, err
-	}
-	if err := tx.Commit(); err != nil {
+	if err := s.meta.updateSite(site, next); err != nil {
 		return Site{}, err
 	}
 	s.putSite(next)
@@ -204,7 +138,7 @@ func (s *Store) RemoveAlias(id int32, domain string) (Site, error) {
 	if !ok || !slices.Contains(site.Aliases, domain) {
 		return Site{}, ErrNotFound
 	}
-	if _, err := s.DB.Exec(`DELETE FROM site_aliases WHERE domain = ? AND site_id = ?`, domain, id); err != nil {
+	if err := s.meta.removeAlias(id, domain); err != nil {
 		return Site{}, err
 	}
 	site.Aliases = slices.DeleteFunc(slices.Clone(site.Aliases), func(a string) bool { return a == domain })
@@ -215,24 +149,11 @@ func (s *Store) RemoveAlias(id int32, domain string) (Site, error) {
 func (s *Store) DeleteSite(id int32) error {
 	s.siteWrite.Lock()
 	defer s.siteWrite.Unlock()
-	if _, ok := s.SiteByID(id); !ok {
+	site, ok := s.SiteByID(id)
+	if !ok {
 		return ErrNotFound
 	}
-	tx, err := s.DB.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	for _, stmt := range []string{
-		`DELETE FROM events WHERE site_id = ?`,
-		`DELETE FROM site_aliases WHERE site_id = ?`,
-		`DELETE FROM sites WHERE id = ?`,
-	} {
-		if _, err := tx.Exec(stmt, id); err != nil {
-			return err
-		}
-	}
-	if err := tx.Commit(); err != nil {
+	if err := s.meta.deleteSite(site); err != nil {
 		return err
 	}
 	s.mu.Lock()

@@ -9,7 +9,16 @@ import (
 
 func TestRenameSite(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "test.duckdb")
-	st, err := Open(path, Options{})
+	testRenameSite(t, func() (*Store, error) { return Open(path, Options{}) })
+}
+
+func TestRenameSiteClickHouse(t *testing.T) {
+	url := clickHouseTestDB(t)
+	testRenameSite(t, func() (*Store, error) { return Open("", Options{ClickHouseURL: url}) })
+}
+
+func testRenameSite(t *testing.T, open func() (*Store, error)) {
+	st, err := open()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,10 +60,9 @@ func TestRenameSite(t *testing.T) {
 
 	// Survives a restart.
 	st.Close()
-	if st, err = Open(path, Options{}); err != nil {
+	if st, err = open(); err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
 	if got, ok := st.SiteByDomain("new.com"); !ok || got.Domain != "old.com" || got.Timezone != "Asia/Tokyo" {
 		t.Errorf("after reopen: %+v, %v", got, ok)
 	}
@@ -75,5 +83,21 @@ func TestRenameSite(t *testing.T) {
 	}
 	if _, ok := st.SiteByDomain("other.com"); ok {
 		t.Error("deleted site's alias still resolves")
+	}
+
+	// Deletions survive a restart too.
+	st.Close()
+	if st, err = open(); err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if _, ok := st.SiteByID(b.ID); ok {
+		t.Error("deleted site is back after reopen")
+	}
+	if _, ok := st.SiteByDomain("new.com"); !ok {
+		t.Error("site on a freed domain is gone after reopen")
+	}
+	if got, _ := st.SiteByDomain("old.com"); len(got.Aliases) != 0 {
+		t.Errorf("removed alias is back after reopen: %+v", got)
 	}
 }

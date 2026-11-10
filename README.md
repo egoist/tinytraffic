@@ -86,6 +86,7 @@ To send events from a backend instead, see
 | `-addr` | `TT_ADDR` | `:8080` | Listen address |
 | `-data` | `TT_DATA_DIR` | `./data` | Holds `tinytraffic.duckdb` |
 | `-memory-limit` | `TT_MEMORY_LIMIT` | `1GB` | DuckDB memory cap |
+| `-clickhouse` | `TT_CLICKHOUSE_URL` | | Use ClickHouse instead of DuckDB, see [ClickHouse](#clickhouse) |
 | `-geoip` | `TT_GEOIP_DB` | see below | Comma-separated `.mmdb` files (MaxMind or DB-IP format, country or city) |
 | `-trust-proxy` | `TT_TRUST_PROXY=true` | off | Read client IPs from `CF-Connecting-IP` / `X-Real-IP` / `X-Forwarded-For`. Enable only behind a reverse proxy |
 | | `TT_PASSWORD` | | Sets the password on first start, so nobody else can claim the setup screen |
@@ -101,14 +102,81 @@ the credit line the database's license asks for.
 
 To refresh it: `bun update @ip-location-db/dbip-city-mmdb`.
 
+### ClickHouse
+
+Everything can live in [ClickHouse](https://clickhouse.com) instead of the
+DuckDB file: sites, settings, the password, API keys, salts and events. Use it
+for more traffic than one DuckDB file handles comfortably, or for deploys
+without downtime: several tinytraffic processes can use one ClickHouse
+database at once, so a new container can start before the old one stops.
+
+```sh
+tinytraffic -clickhouse clickhouse://user:password@host:9000/tinytraffic
+```
+
+The URL is clickhouse-go's DSN: `clickhouse://` for the native protocol
+(port 9000) or `http://` / `https://` (port 8123). Create the database first,
+e.g. `CREATE DATABASE tinytraffic`; tinytraffic creates its tables in it on
+start. With ClickHouse, the data directory and `-memory-limit` aren't used,
+except to find `geo.mmdb`.
+
+tinytraffic expects a single ClickHouse server, not a cluster: its tables are
+plain `MergeTree` tables created without `ON CLUSTER`, so they aren't
+replicated or sharded.
+
+To move an existing install over, stop the server, copy everything, then
+start it with the URL:
+
+```sh
+tinytraffic migrate-clickhouse -data ./data -clickhouse clickhouse://user:password@host:9000/tinytraffic
+tinytraffic -clickhouse clickhouse://user:password@host:9000/tinytraffic
+```
+
+`migrate-clickhouse` copies sites, API keys, settings (so the password and
+sign-ins keep working), today's salt and all events. It's safe to run again:
+what ClickHouse already has is kept, and after an interruption it resumes
+where it stopped without copying an event twice. It stops with an error if a
+site ID means a different site in ClickHouse, which happens if the server was
+started on the empty ClickHouse database and a site was added there first.
+Nothing is removed from the DuckDB file, so you can switch back by dropping
+the flag; changes made in ClickHouse in the meantime aren't copied back.
+
+With Docker, run it with the image against the same volume (the image's data
+directory is `/data`), then add the URL to the server container:
+
+```sh
+docker stop tinytraffic
+docker run --rm -v tinytraffic:/data \
+  -e TT_CLICKHOUSE_URL=clickhouse://user:password@clickhouse-host:9000/tinytraffic \
+  ghcr.io/egoist/tinytraffic:main migrate-clickhouse
+# then start the server with -e TT_CLICKHOUSE_URL=... added to its other flags
+```
+
+The ClickHouse host must be reachable from inside the container, so
+`localhost` won't work. If ClickHouse runs in Docker, put both containers on
+one network and use its container name. If it runs on the host, use
+`host.docker.internal` (on Linux, also pass
+`--add-host=host.docker.internal:host-gateway`). In Dokploy, add
+`TT_CLICKHOUSE_URL` under the app's Environment tab. Once the server runs on
+ClickHouse, the volume is no longer needed, unless you keep a custom
+`geo.mmdb` in it.
+
+While two processes overlap, each keeps its own visit sessions in memory, so
+a visitor whose requests reach both in those seconds may be counted as two
+visits. Sites, API keys and the password changed in one process show up in
+the other within 10 seconds. That also means commands like `password` and
+`seed` work while the server runs.
+
 ### Commands
 
-These need the server stopped, since DuckDB allows one process per database
-file:
+With DuckDB, these need the server stopped, since DuckDB allows one process
+per database file. With ClickHouse, pass `-clickhouse` or set
+`TT_CLICKHOUSE_URL` so they use it:
 
 ```sh
 tinytraffic password                    # set a new dashboard password
 tinytraffic seed -days 90 demo.local    # fill a site with demo traffic (-reset replaces it)
+tinytraffic migrate-clickhouse          # copy everything to ClickHouse (see above)
 ```
 
 With Docker, run them against the same volume:
@@ -137,11 +205,14 @@ time, so the new container can't open `/data` while the old one still runs.
 Dokploy updates services start-first by default, which makes the new container
 fail with a DuckDB lock error, yet Dokploy still reports the deploy as done. In
 the app's Swarm settings, set the Update Config and Rollback Config order to
-`stop-first`. Each deploy then has a short outage.
+`stop-first`. Each deploy then has a short outage. With
+[ClickHouse](#clickhouse) there is no lock, so keep the default start-first
+order and deploys have no outage.
 
 **Backups**: stop the server and copy the data directory, or export to Parquet
 with the DuckDB CLI:
 `duckdb data/tinytraffic.duckdb "EXPORT DATABASE 'backup' (FORMAT parquet)"`.
+With ClickHouse, back up its database instead, e.g. with `BACKUP DATABASE`.
 
 ## Development
 
@@ -149,6 +220,7 @@ with the DuckDB CLI:
 bun run demo         # optional: a demo site with 90 days of fake traffic
 bun dev              # everything; open http://localhost:3000
 bun run test         # Go tests
+TT_TEST_CLICKHOUSE=clickhouse://localhost:9000 bun run test   # also against ClickHouse
 bun run typecheck
 ```
 
@@ -172,8 +244,8 @@ Layout:
 ```
 cmd/tinytraffic      entrypoint and subcommands
 internal/ingest      /api/event: bot filter, UA/geo/referrer parsing, visitor hash, sessions
-internal/store       DuckDB schema, sites, API keys, batched event writer
-internal/stats       dashboard queries
+internal/store       sites, API keys, settings, salts and events in DuckDB or ClickHouse; batched writer; migration
+internal/stats       dashboard queries (DuckDB and ClickHouse SQL)
 internal/server      HTTP routes: dashboard API, public API (/api/v1), auth, static files
 internal/seed        demo traffic generator
 web/                 embedded build output (dashboard + tracker)
@@ -204,7 +276,7 @@ Go, instead of `date_trunc`/`timezone()`. DuckDB's ICU timezone functions were
 about 20× slower than the scan itself. A test checks the results against them
 across DST changes.
 
-If you outgrow one machine: the storage layer is the writer plus a handful of
-queries in `internal/stats`, written to translate to ClickHouse (`MergeTree`
-ordered by `(site_id, toDate(ts), visitor_id)`), with stateless ingest nodes in
-front.
+If you outgrow one machine, move to [ClickHouse](#clickhouse). Several
+tinytraffic processes can share it, but each keeps visit sessions in memory,
+so send a visitor's requests to the same process (e.g. sticky sessions by
+IP) when running more than one for long.

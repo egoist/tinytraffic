@@ -7,7 +7,28 @@ import (
 	"math"
 	"strconv"
 	"time"
+
+	"github.com/egoist/tinytraffic/internal/store"
 )
+
+// Most queries are shared between DuckDB and ClickHouse; these helpers cover
+// the functions they name differently. Queries that need a different shape
+// in ClickHouse have a separate ClickHouse version next to them.
+
+// epochUs is SQL for a timestamp column in epoch microseconds.
+func epochUs(b store.Backend, col string) string {
+	if b == store.ClickHouse {
+		return "toUnixTimestamp64Micro(" + col + ")"
+	}
+	return "epoch_us(" + col + ")"
+}
+
+func intDiv(b store.Backend, a, d string) string {
+	if b == store.ClickHouse {
+		return fmt.Sprintf("intDiv(%s, %s)", a, d)
+	}
+	return fmt.Sprintf("((%s) // %s)", a, d)
+}
 
 type Metrics struct {
 	Visitors      int64   `json:"visitors"`
@@ -39,10 +60,25 @@ SELECT
 	coalesce((SELECT avg(CASE WHEN n <= 1 THEN 100.0 ELSE 0 END) FROM s), 0),
 	coalesce((SELECT avg(dur) FROM s), 0)`
 
-func metrics(ctx context.Context, db *sql.DB, q Query, start, end time.Time) (Metrics, error) {
-	where, args := q.where(start, end)
+// ClickHouse inlines CTEs instead of computing them once, so the query above
+// would scan the events four times. This version reads them once, merging
+// per-session sets of visitors. avg over no rows is NaN there, not NULL.
+const metricsClickHouseSQL = `
+SELECT uniqExactMerge(v), count(), sum(pv), ifNotFinite(avg(n <= 1) * 100, 0), ifNotFinite(avg(dur), 0)
+FROM (
+	SELECT session_id, uniqExactState(visitor_id) AS v, count() AS n, countIf(name = 'pageview') AS pv,
+	       (toUnixTimestamp64Micro(max(ts)) - toUnixTimestamp64Micro(min(ts))) / 1e6 AS dur
+	FROM events WHERE %s GROUP BY session_id
+)`
+
+func metrics(ctx context.Context, ev *store.Events, q Query, start, end time.Time) (Metrics, error) {
+	where, args := q.where(ev.Backend, start, end)
+	query := metricsSQL
+	if ev.Backend == store.ClickHouse {
+		query = metricsClickHouseSQL
+	}
 	var m Metrics
-	err := db.QueryRowContext(ctx, fmt.Sprintf(metricsSQL, where), args...).
+	err := ev.QueryRowContext(ctx, fmt.Sprintf(query, where), args...).
 		Scan(&m.Visitors, &m.Visits, &m.Pageviews, &m.BounceRate, &m.VisitDuration)
 	if m.Visits > 0 {
 		m.ViewsPerVisit = float64(m.Pageviews) / float64(m.Visits)
@@ -50,9 +86,9 @@ func metrics(ctx context.Context, db *sql.DB, q Query, start, end time.Time) (Me
 	return m, err
 }
 
-func Aggregate(ctx context.Context, db *sql.DB, q Query, now time.Time) (AggregateResult, error) {
+func Aggregate(ctx context.Context, ev *store.Events, q Query, now time.Time) (AggregateResult, error) {
 	var res AggregateResult
-	cur, err := metrics(ctx, db, q, q.Start, q.End)
+	cur, err := metrics(ctx, ev, q, q.Start, q.End)
 	if err != nil {
 		return res, err
 	}
@@ -60,7 +96,7 @@ func Aggregate(ctx context.Context, db *sql.DB, q Query, now time.Time) (Aggrega
 	if q.Period != "all" {
 		end := q.clampedEnd(now)
 		span := end.Sub(q.Start)
-		prev, err := metrics(ctx, db, q, q.Start.Add(-span), q.Start)
+		prev, err := metrics(ctx, ev, q, q.Start.Add(-span), q.Start)
 		if err != nil {
 			return res, err
 		}
@@ -78,8 +114,8 @@ const bucketLayout = "2006-01-02T15:04:05"
 
 const timeseriesSQL = `
 WITH e AS (
-	SELECT visitor_id, session_id, name, epoch_us(ts) AS us, %[1]s AS bucket
-	FROM events WHERE %[2]s
+	SELECT visitor_id, session_id, name, %[1]s AS us, %[2]s AS bucket
+	FROM events WHERE %[3]s
 ),
 v AS (
 	SELECT bucket, count(DISTINCT visitor_id) AS visitors, count(*) FILTER (WHERE name = 'pageview') AS pageviews
@@ -98,10 +134,11 @@ FROM v LEFT JOIN sb USING (bucket)`
 
 // Timeseries returns one point per interval, including empty ones. Sessions
 // count toward the bucket they started in.
-func Timeseries(ctx context.Context, db *sql.DB, q Query) ([]Point, error) {
-	where, args := q.where(q.Start, q.End)
+func Timeseries(ctx context.Context, ev *store.Events, q Query) ([]Point, error) {
+	where, args := q.where(ev.Backend, q.Start, q.End)
 	b := newBucketer(q.Loc, q.Start, q.End, q.Interval)
-	rows, err := db.QueryContext(ctx, fmt.Sprintf(timeseriesSQL, b.keySQL("epoch_us(ts)"), where), args...)
+	us := epochUs(ev.Backend, "ts")
+	rows, err := ev.QueryContext(ctx, fmt.Sprintf(timeseriesSQL, us, b.keySQL(ev.Backend, us), where), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -155,8 +192,8 @@ type BreakdownResult struct {
 	TotalVisitors int64 `json:"total_visitors"`
 }
 
-func Breakdown(ctx context.Context, db *sql.DB, q Query, dim string, limit int) (BreakdownResult, error) {
-	where, args := q.where(q.Start, q.End)
+func Breakdown(ctx context.Context, ev *store.Events, q Query, dim string, limit int) (BreakdownResult, error) {
+	where, args := q.where(ev.Backend, q.Start, q.End)
 	var sqlText, totalSQL string
 	switch dim {
 	case "entry_page", "exit_page":
@@ -167,7 +204,7 @@ func Breakdown(ctx context.Context, db *sql.DB, q Query, dim string, limit int) 
 		sqlText = fmt.Sprintf(`
 WITH s AS (
 	SELECT session_id, any_value(visitor_id) AS visitor_id,
-	       arg_min(pathname, ts) AS entry, arg_max(pathname, ts) AS exit
+	       argMin(pathname, ts) AS entry, argMax(pathname, ts) AS exit
 	FROM events WHERE %s AND name = 'pageview' GROUP BY session_id
 )
 SELECT %s, count(DISTINCT visitor_id) AS visitors, count(*) AS c, 0 FROM s
@@ -179,7 +216,7 @@ SELECT name, count(DISTINCT visitor_id) AS visitors, count(*) AS c, 0 FROM event
 WHERE %s AND name <> 'pageview' GROUP BY 1 ORDER BY visitors DESC, c DESC, 1 LIMIT ?`, where)
 		totalSQL = fmt.Sprintf(`SELECT count(DISTINCT visitor_id) FROM events WHERE %s`, where)
 	default:
-		col, ok := columns[dim]
+		col, ok := column(ev.Backend, dim)
 		if !ok {
 			return BreakdownResult{}, fmt.Errorf("unknown dimension %q", dim)
 		}
@@ -188,7 +225,7 @@ WHERE %s AND name <> 'pageview' GROUP BY 1 ORDER BY visitors DESC, c DESC, 1 LIM
 			extra = " AND name = 'pageview'"
 		}
 		if dim == "referrer" {
-			links = "count(DISTINCT referrer) FILTER (WHERE contains(referrer, '/'))"
+			links = "count(DISTINCT referrer) FILTER (WHERE referrer LIKE '%/%')"
 		}
 		sqlText = fmt.Sprintf(`
 SELECT %s, count(DISTINCT visitor_id) AS visitors, count(*) FILTER (WHERE name = 'pageview') AS c, %s FROM events
@@ -197,7 +234,7 @@ WHERE %s%s GROUP BY 1 ORDER BY visitors DESC, c DESC, 1 LIMIT ?`, col, links, wh
 	}
 
 	res := BreakdownResult{Rows: []Row{}}
-	rows, err := db.QueryContext(ctx, sqlText, append(args, limit)...)
+	rows, err := ev.QueryContext(ctx, sqlText, append(args, limit)...)
 	if err != nil {
 		return res, err
 	}
@@ -212,23 +249,28 @@ WHERE %s%s GROUP BY 1 ORDER BY visitors DESC, c DESC, 1 LIMIT ?`, col, links, wh
 	if err := rows.Err(); err != nil {
 		return res, err
 	}
-	err = db.QueryRowContext(ctx, totalSQL, args...).Scan(&res.TotalVisitors)
+	err = ev.QueryRowContext(ctx, totalSQL, args...).Scan(&res.TotalVisitors)
 	return res, err
 }
 
 // Realtime counts visitors seen in the last five minutes.
-func Realtime(ctx context.Context, db *sql.DB, siteID int32, now time.Time) (int64, error) {
+func Realtime(ctx context.Context, ev *store.Events, siteID int32, now time.Time) (int64, error) {
 	var n int64
-	err := db.QueryRowContext(ctx,
+	err := ev.QueryRowContext(ctx,
 		`SELECT count(DISTINCT visitor_id) FROM events WHERE site_id = ? AND ts >= ?`,
 		siteID, now.Add(-5*time.Minute).UTC()).Scan(&n)
 	return n, err
 }
 
 // FirstEvent returns the time of a site's earliest event.
-func FirstEvent(ctx context.Context, db *sql.DB, siteID int32) (time.Time, bool) {
+func FirstEvent(ctx context.Context, ev *store.Events, siteID int32) (time.Time, bool) {
+	query := `SELECT min(ts) FROM events WHERE site_id = ?`
+	if ev.Backend == store.ClickHouse {
+		// min over no rows is 1970-01-01 there, not NULL.
+		query = `SELECT minOrNull(ts) FROM events WHERE site_id = ?`
+	}
 	var t sql.NullTime
-	if err := db.QueryRowContext(ctx, `SELECT min(ts) FROM events WHERE site_id = ?`, siteID).Scan(&t); err != nil || !t.Valid {
+	if err := ev.QueryRowContext(ctx, query, siteID).Scan(&t); err != nil || !t.Valid {
 		return time.Time{}, false
 	}
 	return t.Time, true
@@ -241,7 +283,7 @@ type SiteSummary struct {
 
 // Overview returns visitors over the last 24 hours and an hourly sparkline
 // of the 24 complete hours before the current one, for every site.
-func Overview(ctx context.Context, db *sql.DB, now time.Time) (map[int32]*SiteSummary, error) {
+func Overview(ctx context.Context, ev *store.Events, now time.Time) (map[int32]*SiteSummary, error) {
 	end := now.UTC().Truncate(time.Hour)
 	start := end.Add(-24 * time.Hour)
 	out := map[int32]*SiteSummary{}
@@ -254,8 +296,9 @@ func Overview(ctx context.Context, db *sql.DB, now time.Time) (map[int32]*SiteSu
 		return s
 	}
 
-	rows, err := db.QueryContext(ctx, `
-SELECT site_id, CAST((epoch_us(ts) - ?) // 3600000000 AS INTEGER) AS h, count(DISTINCT visitor_id)
+	hour := intDiv(ev.Backend, epochUs(ev.Backend, "ts")+" - ?", "3600000000")
+	rows, err := ev.QueryContext(ctx, `
+SELECT site_id, CAST(`+hour+` AS INTEGER) AS h, count(DISTINCT visitor_id)
 FROM events WHERE ts >= ? AND ts < ? GROUP BY 1, 2`, start.UnixMicro(), start, end)
 	if err != nil {
 		return nil, err
@@ -276,7 +319,7 @@ FROM events WHERE ts >= ? AND ts < ? GROUP BY 1, 2`, start.UnixMicro(), start, e
 		return nil, err
 	}
 
-	totals, err := db.QueryContext(ctx, `
+	totals, err := ev.QueryContext(ctx, `
 SELECT site_id, count(DISTINCT visitor_id) FROM events WHERE ts >= ? GROUP BY 1`, now.UTC().Add(-24*time.Hour))
 	if err != nil {
 		return nil, err
@@ -303,9 +346,9 @@ type LocationPoint struct {
 
 // Locations returns one point per city, busiest first, for maps. Events
 // without coordinates are left out.
-func Locations(ctx context.Context, db *sql.DB, q Query, limit int) ([]LocationPoint, error) {
-	where, args := q.where(q.Start, q.End)
-	rows, err := db.QueryContext(ctx, fmt.Sprintf(`
+func Locations(ctx context.Context, ev *store.Events, q Query, limit int) ([]LocationPoint, error) {
+	where, args := q.where(ev.Backend, q.Start, q.End)
+	rows, err := ev.QueryContext(ctx, fmt.Sprintf(`
 SELECT country, city, avg(latitude), avg(longitude), count(DISTINCT visitor_id) AS visitors
 FROM events WHERE %s AND latitude IS NOT NULL
 GROUP BY country, city ORDER BY visitors DESC, country, city LIMIT ?`, where), append(args, limit)...)
@@ -365,23 +408,8 @@ type LiveResult struct {
 	Events   []LiveEvent   `json:"events"` // newest first
 }
 
-// Live returns the sessions active in the last LiveWindow, most recently
-// active first, and their latest events. Session details (entry source,
-// start time, pageviews) cover the whole visit, not only the window.
-func Live(ctx context.Context, db *sql.DB, siteID int32, now time.Time, limit int) (LiveResult, error) {
-	res := LiveResult{Sessions: []LiveSession{}, Events: []LiveEvent{}}
-	since := now.Add(-LiveWindow).UTC()
-	// Sessions end after 30 minutes of inactivity but can run longer; a few
-	// hours back covers all but marathon visits.
-	visitStart := now.Add(-6 * time.Hour).UTC()
-
-	if err := db.QueryRowContext(ctx,
-		`SELECT count(DISTINCT visitor_id) FROM events WHERE site_id = ? AND ts >= ?`,
-		siteID, since).Scan(&res.Visitors); err != nil {
-		return res, err
-	}
-
-	rows, err := db.QueryContext(ctx, `
+// liveSessionsSQL summarizes the most recently active sessions.
+const liveSessionsSQL = `
 WITH active AS (
 	SELECT session_id, max(ts) AS last_seen FROM events
 	WHERE site_id = ? AND ts >= ? GROUP BY 1 ORDER BY 2 DESC LIMIT ?
@@ -396,7 +424,48 @@ SELECT e.session_id, any_value(a.last_seen),
 	min(e.ts)
 FROM events e JOIN active a USING (session_id)
 WHERE e.site_id = ? AND e.ts >= ?
-GROUP BY e.session_id ORDER BY 2 DESC`, siteID, since, limit, siteID, visitStart)
+GROUP BY e.session_id ORDER BY 2 DESC`
+
+// ClickHouse returns ” instead of NULL from an -If aggregate with no rows,
+// so the fallback page needs a condition instead of coalesce. It also prefers
+// IN over a JOIN, and last_seen is the session's latest event.
+const liveSessionsClickHouseSQL = `
+SELECT session_id, max(ts) AS last_seen,
+	argMax(country, ts), argMax(region, ts), argMax(city, ts),
+	argMax(latitude, ts), argMax(longitude, ts),
+	if(countIf(name = 'pageview') > 0, argMaxIf(pathname, ts, name = 'pageview'), argMax(pathname, ts)),
+	argMin(referrer_source, ts), argMin(referrer, ts),
+	argMax(browser, ts), argMax(os, ts), argMax(device, ts),
+	countIf(name = 'pageview'), countIf(name <> 'pageview'),
+	min(ts)
+FROM events
+WHERE site_id = ? AND ts >= ? AND session_id IN (
+	SELECT session_id FROM events WHERE site_id = ? AND ts >= ?
+	GROUP BY session_id ORDER BY max(ts) DESC LIMIT ?
+)
+GROUP BY session_id ORDER BY last_seen DESC`
+
+// Live returns the sessions active in the last LiveWindow, most recently
+// active first, and their latest events. Session details (entry source,
+// start time, pageviews) cover the whole visit, not only the window.
+func Live(ctx context.Context, ev *store.Events, siteID int32, now time.Time, limit int) (LiveResult, error) {
+	res := LiveResult{Sessions: []LiveSession{}, Events: []LiveEvent{}}
+	since := now.Add(-LiveWindow).UTC()
+	// Sessions end after 30 minutes of inactivity but can run longer; a few
+	// hours back covers all but marathon visits.
+	visitStart := now.Add(-6 * time.Hour).UTC()
+
+	if err := ev.QueryRowContext(ctx,
+		`SELECT count(DISTINCT visitor_id) FROM events WHERE site_id = ? AND ts >= ?`,
+		siteID, since).Scan(&res.Visitors); err != nil {
+		return res, err
+	}
+
+	query, args := liveSessionsSQL, []any{siteID, since, limit, siteID, visitStart}
+	if ev.Backend == store.ClickHouse {
+		query, args = liveSessionsClickHouseSQL, []any{siteID, visitStart, siteID, since, limit}
+	}
+	rows, err := ev.QueryContext(ctx, query, args...)
 	if err != nil {
 		return res, err
 	}
@@ -421,7 +490,7 @@ GROUP BY e.session_id ORDER BY 2 DESC`, siteID, since, limit, siteID, visitStart
 		return res, err
 	}
 
-	events, err := db.QueryContext(ctx, `
+	events, err := ev.QueryContext(ctx, `
 SELECT ts, session_id, name, pathname FROM events
 WHERE site_id = ? AND ts >= ? ORDER BY ts DESC LIMIT 50`, siteID, since)
 	if err != nil {

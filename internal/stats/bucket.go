@@ -5,6 +5,8 @@ import (
 	"math"
 	"strings"
 	"time"
+
+	"github.com/egoist/tinytraffic/internal/store"
 )
 
 // bucketer assigns events to local-time buckets with integer math.
@@ -67,16 +69,20 @@ func (b bucketer) localUs(us string) string {
 }
 
 // keySQL returns SQL computing the integer bucket key of us.
-func (b bucketer) keySQL(us string) string {
+func (b bucketer) keySQL(db store.Backend, us string) string {
 	local := b.localUs(us)
 	switch b.interval {
 	case "hour":
-		return fmt.Sprintf("(%s // 3600000000)", local)
+		return intDiv(db, local, "3600000000")
 	case "month":
+		if db == store.ClickHouse {
+			d := fmt.Sprintf("addDays(toDate('1970-01-01'), %s)", intDiv(db, local, "86400000000"))
+			return fmt.Sprintf("(toYear(%s) * 12 + toMonth(%s) - 1)", d, d)
+		}
 		d := fmt.Sprintf("(DATE '1970-01-01' + CAST(%s // 86400000000 AS INTEGER))", local)
 		return fmt.Sprintf("(year(%s) * 12 + month(%s) - 1)", d, d)
 	default:
-		return fmt.Sprintf("(%s // 86400000000)", local)
+		return intDiv(db, local, "86400000000")
 	}
 }
 

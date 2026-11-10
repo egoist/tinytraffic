@@ -50,7 +50,7 @@ func TestPublicAPI(t *testing.T) {
 	defer st.Close()
 	site, _ := st.CreateSite("example.com", "UTC")
 	now := time.Now().UTC()
-	store.InsertEvents(context.Background(), st.DB, []store.Event{
+	st.Events.Insert(context.Background(), []store.Event{
 		{Timestamp: now.Add(-time.Hour), SiteID: site.ID, Name: "pageview", Pathname: "/", VisitorID: 1, SessionID: 1},
 		{Timestamp: now.Add(-time.Hour), SiteID: site.ID, Name: "pageview", Pathname: "/docs", VisitorID: 2, SessionID: 2},
 	})

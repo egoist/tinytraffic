@@ -3,7 +3,6 @@ package store
 import (
 	"crypto/rand"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -37,33 +36,6 @@ func hashKey(token string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func (s *Store) loadAPIKeys() error {
-	rows, err := s.DB.Query(`SELECT id, name, prefix, scope, hash, created_at, last_used_at FROM api_keys`)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	keys := map[string]*APIKey{}
-	for rows.Next() {
-		k := &APIKey{}
-		var last sql.NullTime
-		if err := rows.Scan(&k.ID, &k.Name, &k.Prefix, &k.Scope, &k.hash, &k.CreatedAt, &last); err != nil {
-			return err
-		}
-		if last.Valid {
-			k.LastUsedAt = &last.Time
-		}
-		keys[k.hash] = k
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	s.keysMu.Lock()
-	s.keys = keys
-	s.keysMu.Unlock()
-	return nil
-}
-
 // CreateAPIKey returns the new key and its secret token. The token is only
 // available now; afterwards just its hash is kept.
 func (s *Store) CreateAPIKey(name, scope string) (APIKey, string, error) {
@@ -74,11 +46,9 @@ func (s *Store) CreateAPIKey(name, scope string) (APIKey, string, error) {
 	rand.Read(b)
 	token := keyPrefix + base64.RawURLEncoding.EncodeToString(b)
 	k := &APIKey{Name: name, Prefix: token[:len(keyPrefix)+6], Scope: scope, hash: hashKey(token)}
-	err := s.DB.QueryRow(
-		`INSERT INTO api_keys (name, prefix, scope, hash) VALUES (?, ?, ?, ?) RETURNING id, created_at`,
-		k.Name, k.Prefix, k.Scope, k.hash,
-	).Scan(&k.ID, &k.CreatedAt)
-	if err != nil {
+	s.siteWrite.Lock()
+	defer s.siteWrite.Unlock()
+	if err := s.meta.createAPIKey(k); err != nil {
 		return APIKey{}, "", err
 	}
 	s.keysMu.Lock()
@@ -100,12 +70,13 @@ func (s *Store) APIKeys() []APIKey {
 }
 
 func (s *Store) DeleteAPIKey(id int32) error {
-	res, err := s.DB.Exec(`DELETE FROM api_keys WHERE id = ?`, id)
-	if err != nil {
-		return err
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
+	s.siteWrite.Lock()
+	defer s.siteWrite.Unlock()
+	if !slices.ContainsFunc(s.APIKeys(), func(k APIKey) bool { return k.ID == id }) {
 		return ErrNotFound
+	}
+	if err := s.meta.deleteAPIKey(id); err != nil {
+		return err
 	}
 	s.keysMu.Lock()
 	for h, k := range s.keys {
@@ -144,7 +115,7 @@ func (s *Store) AuthenticateAPIKey(token string) (APIKey, bool) {
 		return APIKey{}, false
 	}
 	if touch {
-		go s.DB.Exec(`UPDATE api_keys SET last_used_at = ? WHERE id = ?`, now, key.ID)
+		go s.meta.touchAPIKey(key.ID, now)
 	}
 	return key, true
 }

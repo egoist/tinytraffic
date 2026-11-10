@@ -2,17 +2,27 @@ package ingest
 
 import (
 	"crypto/rand"
-	"database/sql"
-	"errors"
 	"sync"
 	"time"
 )
 
-// Salts holds the daily rotating salt used to hash visitor IDs. Only today's
-// and yesterday's salts exist at any time, so a visitor hash can never be
-// linked across more than two days.
+// SaltStore persists the daily salts (see store.Store).
+type SaltStore interface {
+	Salt(day string) ([]byte, error)
+	// AddSalt stores salt unless the day has one, and returns the day's salt.
+	AddSalt(day string, salt []byte) ([]byte, error)
+	DeleteSaltsBefore(day string) error
+}
+
+// Salts holds the daily rotating salt used to hash visitor IDs. Only
+// yesterday's, today's and tomorrow's salts exist at any time, so a visitor
+// hash can never be linked across more than two days.
+//
+// Tomorrow's salt is made a day ahead, so at midnight it already exists and
+// processes sharing the database (e.g. during a rolling deploy) don't each
+// make their own.
 type Salts struct {
-	db *sql.DB
+	store SaltStore
 
 	mu       sync.Mutex
 	day      string
@@ -20,7 +30,7 @@ type Salts struct {
 	previous []byte
 }
 
-func NewSalts(db *sql.DB) *Salts { return &Salts{db: db} }
+func NewSalts(store SaltStore) *Salts { return &Salts{store: store} }
 
 // Get returns today's salt and yesterday's (nil if there was none).
 func (s *Salts) Get(now time.Time) (current, previous []byte, err error) {
@@ -31,34 +41,33 @@ func (s *Salts) Get(now time.Time) (current, previous []byte, err error) {
 		return s.current, s.previous, nil
 	}
 	yesterday := now.UTC().AddDate(0, 0, -1).Format(time.DateOnly)
+	tomorrow := now.UTC().AddDate(0, 0, 1).Format(time.DateOnly)
 
-	cur, err := s.load(day)
+	cur, err := s.ensure(day)
 	if err != nil {
 		return nil, nil, err
 	}
-	if cur == nil {
-		cur = make([]byte, 16)
-		rand.Read(cur)
-		if _, err := s.db.Exec(`INSERT OR REPLACE INTO salts (day, salt) VALUES (?, ?)`, day, cur); err != nil {
-			return nil, nil, err
-		}
+	if _, err := s.ensure(tomorrow); err != nil {
+		return nil, nil, err
 	}
-	prev, err := s.load(yesterday)
+	prev, err := s.store.Salt(yesterday)
 	if err != nil {
 		return nil, nil, err
 	}
-	if _, err := s.db.Exec(`DELETE FROM salts WHERE day < ?`, yesterday); err != nil {
+	if err := s.store.DeleteSaltsBefore(yesterday); err != nil {
 		return nil, nil, err
 	}
 	s.day, s.current, s.previous = day, cur, prev
 	return cur, prev, nil
 }
 
-func (s *Salts) load(day string) ([]byte, error) {
-	var salt []byte
-	err := s.db.QueryRow(`SELECT salt FROM salts WHERE day = ?`, day).Scan(&salt)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
+// ensure returns a day's salt, making it if there is none.
+func (s *Salts) ensure(day string) ([]byte, error) {
+	salt, err := s.store.Salt(day)
+	if err != nil || salt != nil {
+		return salt, err
 	}
-	return salt, err
+	salt = make([]byte, 16)
+	rand.Read(salt)
+	return s.store.AddSalt(day, salt)
 }
