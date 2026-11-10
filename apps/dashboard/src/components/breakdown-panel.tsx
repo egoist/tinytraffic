@@ -12,6 +12,7 @@ import { Input } from "./ui/input";
 import { Skeleton } from "./ui/skeleton";
 import { TextTabs } from "./ui/tabs";
 import { ready } from "~/lib/query";
+import { storage } from "~/lib/storage";
 
 export type PanelTab = {
   dim: string;
@@ -185,7 +186,14 @@ export function BreakdownPanel(props: {
   class?: string;
   empty?: JSX.Element;
 }) {
-  const [tabDim, setTabDim] = createSignal(props.tabs[0].dim);
+  // Each card remembers its last selected tab in this browser.
+  const storageKey = `tt-tab:${props.title}`;
+  const saved = storage.get(storageKey);
+  const [tabDim, setTabDimSignal] = createSignal(props.tabs.some((t) => t.dim === saved) ? saved! : props.tabs[0].dim);
+  const setTabDim = (dim: string) => {
+    setTabDimSignal(dim);
+    storage.set(storageKey, dim);
+  };
   const tab = () => props.tabs.find((t) => t.dim === tabDim()) ?? props.tabs[0];
   const query = useQuery(() => ({
     queryKey: ["breakdown", props.domain, tab().dim, props.params],
