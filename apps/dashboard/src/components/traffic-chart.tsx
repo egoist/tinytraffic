@@ -1,6 +1,7 @@
 import { createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Show, untrack } from "solid-js";
 import type { Point } from "~/lib/api";
 import { formatBucket } from "~/lib/format";
+import { cn } from "~/lib/utils";
 
 export type ChartMetric = {
   label: string;
@@ -85,11 +86,18 @@ export function TrafficChart(props: {
   let container!: HTMLDivElement;
   const [width, setWidth] = createSignal(800);
   const [hover, setHover] = createSignal<number | null>(null);
+  // The chart appears already in place; transitions switch on only after
+  // its first frame has been drawn, so later changes animate.
+  const [settled, setSettled] = createSignal(false);
 
   onMount(() => {
     const ro = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
     ro.observe(container);
-    onCleanup(() => ro.disconnect());
+    let frame = requestAnimationFrame(() => (frame = requestAnimationFrame(() => setSettled(true))));
+    onCleanup(() => {
+      ro.disconnect();
+      cancelAnimationFrame(frame);
+    });
   });
 
   // The vertical scale and where each point should end up.
@@ -181,18 +189,25 @@ export function TrafficChart(props: {
     >
       <svg width="100%" height={HEIGHT} role="img" aria-label={`${props.metric.label} over time`}>
         <For each={geo().ticks}>
-          {(t) => (
-            // Ticks slide to their new height with the line; new ones fade in.
-            <g
-              class="animate-in fade-in transition-transform duration-[450ms] ease-[cubic-bezier(0.33,1,0.68,1)] motion-reduce:animate-none motion-reduce:transition-none"
-              style={{ transform: `translateY(${geo().y(t)}px)` }}
-            >
-              <line x1={M.left} x2={width() - M.right} y1={0} y2={0} stroke="var(--chart-grid)" stroke-width="1" />
-              <text x={M.left - 10} y={0} dy="0.32em" text-anchor="end" class="fill-muted-foreground text-[11px] tabular">
-                {props.metric.format(t)}
-              </text>
-            </g>
-          )}
+          {(t) => {
+            // Ticks slide to their new height with the line; ones added
+            // after the first frame fade in.
+            const added = untrack(settled);
+            return (
+              <g
+                class={cn(
+                  added && "animate-in fade-in motion-reduce:animate-none",
+                  settled() && "transition-transform duration-[450ms] ease-[cubic-bezier(0.33,1,0.68,1)] motion-reduce:transition-none",
+                )}
+                style={{ transform: `translateY(${geo().y(t)}px)` }}
+              >
+                <line x1={M.left} x2={width() - M.right} y1={0} y2={0} stroke="var(--chart-grid)" stroke-width="1" />
+                <text x={M.left - 10} y={0} dy="0.32em" text-anchor="end" class="fill-muted-foreground text-[11px] tabular">
+                  {props.metric.format(t)}
+                </text>
+              </g>
+            );
+          }}
         </For>
         <For each={geo().xLabels}>
           {({ i, p }) => (
