@@ -6,16 +6,24 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
+	"fmt"
 	"slices"
 	"strings"
 	"time"
 )
 
-// APIKey grants read-only access to the public API (/api/v1).
+// Scopes an API key can have. Write includes read.
+const (
+	ScopeRead  = "read"
+	ScopeWrite = "write"
+)
+
+// APIKey grants access to the public API (/api/v1).
 type APIKey struct {
 	ID         int32      `json:"id"`
 	Name       string     `json:"name"`
 	Prefix     string     `json:"prefix"`
+	Scope      string     `json:"scope"`
 	CreatedAt  time.Time  `json:"created_at"`
 	LastUsedAt *time.Time `json:"last_used_at"`
 
@@ -30,7 +38,7 @@ func hashKey(token string) string {
 }
 
 func (s *Store) loadAPIKeys() error {
-	rows, err := s.DB.Query(`SELECT id, name, prefix, hash, created_at, last_used_at FROM api_keys`)
+	rows, err := s.DB.Query(`SELECT id, name, prefix, scope, hash, created_at, last_used_at FROM api_keys`)
 	if err != nil {
 		return err
 	}
@@ -39,7 +47,7 @@ func (s *Store) loadAPIKeys() error {
 	for rows.Next() {
 		k := &APIKey{}
 		var last sql.NullTime
-		if err := rows.Scan(&k.ID, &k.Name, &k.Prefix, &k.hash, &k.CreatedAt, &last); err != nil {
+		if err := rows.Scan(&k.ID, &k.Name, &k.Prefix, &k.Scope, &k.hash, &k.CreatedAt, &last); err != nil {
 			return err
 		}
 		if last.Valid {
@@ -58,14 +66,17 @@ func (s *Store) loadAPIKeys() error {
 
 // CreateAPIKey returns the new key and its secret token. The token is only
 // available now; afterwards just its hash is kept.
-func (s *Store) CreateAPIKey(name string) (APIKey, string, error) {
+func (s *Store) CreateAPIKey(name, scope string) (APIKey, string, error) {
+	if scope != ScopeRead && scope != ScopeWrite {
+		return APIKey{}, "", fmt.Errorf("unknown scope %q", scope)
+	}
 	b := make([]byte, 24)
 	rand.Read(b)
 	token := keyPrefix + base64.RawURLEncoding.EncodeToString(b)
-	k := &APIKey{Name: name, Prefix: token[:len(keyPrefix)+6], hash: hashKey(token)}
+	k := &APIKey{Name: name, Prefix: token[:len(keyPrefix)+6], Scope: scope, hash: hashKey(token)}
 	err := s.DB.QueryRow(
-		`INSERT INTO api_keys (name, prefix, hash) VALUES (?, ?, ?) RETURNING id, created_at`,
-		k.Name, k.Prefix, k.hash,
+		`INSERT INTO api_keys (name, prefix, scope, hash) VALUES (?, ?, ?, ?) RETURNING id, created_at`,
+		k.Name, k.Prefix, k.Scope, k.hash,
 	).Scan(&k.ID, &k.CreatedAt)
 	if err != nil {
 		return APIKey{}, "", err
@@ -105,6 +116,9 @@ func (s *Store) DeleteAPIKey(id int32) error {
 	s.keysMu.Unlock()
 	return nil
 }
+
+// CanWrite reports whether the key may change data.
+func (k APIKey) CanWrite() bool { return k.Scope == ScopeWrite }
 
 // AuthenticateAPIKey resolves a token to its key and records the use. The
 // last-used time is written at most once a minute per key.

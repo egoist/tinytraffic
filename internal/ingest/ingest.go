@@ -25,7 +25,10 @@ type Handler struct {
 	Salts      *Salts
 	Geo        *Geo
 	TrustProxy bool
-	Log        *slog.Logger
+	// TrustRequest, when set, can vouch for a single request's proxy
+	// headers, e.g. a server sending events with a write API key.
+	TrustRequest func(*http.Request) bool
+	Log          *slog.Logger
 
 	sessions *sessions
 }
@@ -69,7 +72,7 @@ func (p *payload) normalize() {
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusNoContent)
 		return
@@ -109,7 +112,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		domains = []string{pageURL.Hostname()}
 	}
 	now := time.Now().UTC()
-	ip := ClientIP(r, h.TrustProxy)
+	ip := ClientIP(r, h.TrustProxy || (h.TrustRequest != nil && h.TrustRequest(r)))
 	cur, prev, err := h.Salts.Get(now)
 	if err != nil {
 		h.Log.Error("load salt", "err", err)

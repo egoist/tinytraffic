@@ -134,6 +134,7 @@ func serve(args []string) error {
 		Ingest: ingest.NewHandler(ingest.Handler{
 			Store: st, Writer: writer, Salts: ingest.NewSalts(st.DB),
 			Geo: geo, TrustProxy: *trustProxy, Log: log,
+			TrustRequest: server.TrustedEventSender(st),
 		}),
 		Log:         log,
 		Geo:         geo,

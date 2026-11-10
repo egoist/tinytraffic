@@ -25,7 +25,14 @@ func testServer(t *testing.T, st *store.Store) http.Handler {
 }
 
 func call(h http.Handler, method, path, token string) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(method, path, nil)
+	return callJSON(h, method, path, token, "")
+}
+
+func callJSON(h http.Handler, method, path, token, body string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(method, path, strings.NewReader(body))
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
@@ -47,7 +54,7 @@ func TestPublicAPI(t *testing.T) {
 		{Timestamp: now.Add(-time.Hour), SiteID: site.ID, Name: "pageview", Pathname: "/docs", VisitorID: 2, SessionID: 2},
 	})
 	h := testServer(t, st)
-	key, token, err := st.CreateAPIKey("my app")
+	key, token, err := st.CreateAPIKey("my app", store.ScopeRead)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +131,7 @@ func TestAPIKeysPersist(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, token, _ := st.CreateAPIKey("ci")
+	_, token, _ := st.CreateAPIKey("ci", store.ScopeRead)
 	st.Close()
 
 	st, err = store.Open(path, store.Options{})
@@ -134,5 +141,56 @@ func TestAPIKeysPersist(t *testing.T) {
 	defer st.Close()
 	if k, ok := st.AuthenticateAPIKey(token); !ok || k.Name != "ci" {
 		t.Errorf("key not found after reopening: %+v %v", k, ok)
+	}
+}
+
+func TestWriteScope(t *testing.T) {
+	st, err := store.Open("", store.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	h := testServer(t, st)
+	_, readKey, _ := st.CreateAPIKey("reader", store.ScopeRead)
+	_, writeKey, _ := st.CreateAPIKey("writer", store.ScopeWrite)
+	if _, _, err := st.CreateAPIKey("bad", "admin"); err == nil {
+		t.Error("unknown scope accepted")
+	}
+
+	if rec := callJSON(h, "POST", "/api/v1/sites", readKey, `{"domain":"new.com"}`); rec.Code != 403 {
+		t.Errorf("read key creating a site: %d %s", rec.Code, rec.Body)
+	}
+	if rec := callJSON(h, "POST", "/api/v1/sites", writeKey, `{"domain":"https://www.New.com/","timezone":"Europe/Berlin"}`); rec.Code != 201 || !strings.Contains(rec.Body.String(), `"domain":"new.com"`) {
+		t.Fatalf("write key creating a site: %d %s", rec.Code, rec.Body)
+	}
+	if rec := callJSON(h, "PATCH", "/api/v1/sites/new.com", writeKey, `{"timezone":"Asia/Tokyo"}`); rec.Code != 200 || !strings.Contains(rec.Body.String(), "Asia/Tokyo") {
+		t.Errorf("update: %d %s", rec.Code, rec.Body)
+	}
+	// Write keys can read too.
+	if rec := call(h, "GET", "/api/v1/sites/new.com/aggregate?period=7d", writeKey); rec.Code != 200 {
+		t.Errorf("write key reading: %d", rec.Code)
+	}
+	if rec := call(h, "DELETE", "/api/v1/sites/new.com", readKey); rec.Code != 403 {
+		t.Errorf("read key deleting: %d", rec.Code)
+	}
+	if rec := call(h, "DELETE", "/api/v1/sites/new.com", writeKey); rec.Code != 200 {
+		t.Errorf("delete: %d %s", rec.Code, rec.Body)
+	}
+	if _, ok := st.SiteByDomain("new.com"); ok {
+		t.Error("site still exists after delete")
+	}
+
+	trusted := TrustedEventSender(st)
+	for name, c := range map[string]struct {
+		token string
+		want  bool
+	}{"write": {writeKey, true}, "read": {readKey, false}, "none": {"", false}} {
+		req := httptest.NewRequest("POST", "/api/event", nil)
+		if c.token != "" {
+			req.Header.Set("Authorization", "Bearer "+c.token)
+		}
+		if got := trusted(req); got != c.want {
+			t.Errorf("%s key trusted = %v, want %v", name, got, c.want)
+		}
 	}
 }

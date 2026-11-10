@@ -137,15 +137,16 @@ var migrations = [][]string{
 			key   VARCHAR PRIMARY KEY,
 			value VARCHAR NOT NULL
 		)`,
-	},
-	{
 		// API keys for the public API. Only a SHA-256 hash of each key is
 		// stored; prefix is the start of the key, shown to tell keys apart.
+		// scope is "read" (stats only) or "write" (also manage sites and send
+		// trusted events).
 		`CREATE SEQUENCE api_keys_id_seq START 1`,
 		`CREATE TABLE api_keys (
 			id           INTEGER PRIMARY KEY DEFAULT nextval('api_keys_id_seq'),
 			name         VARCHAR NOT NULL,
 			prefix       VARCHAR NOT NULL,
+			scope        VARCHAR NOT NULL,
 			hash         VARCHAR NOT NULL UNIQUE,
 			created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
 			last_used_at TIMESTAMPTZ

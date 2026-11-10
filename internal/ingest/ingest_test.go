@@ -97,3 +97,37 @@ func TestHandler(t *testing.T) {
 		t.Errorf("events of one visit should share visitor and session ids")
 	}
 }
+
+// A trusted request (e.g. a server with a write key) may forward the
+// visitor's IP; anyone else's X-Forwarded-For is ignored.
+func TestTrustRequestForwardedIP(t *testing.T) {
+	for _, trusted := range []bool{true, false} {
+		st, err := store.Open("", store.Options{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		site, _ := st.CreateSite("example.com", "UTC")
+		log := slog.New(slog.NewTextHandler(io.Discard, nil))
+		w := store.NewWriter(st.DB, log)
+		h := NewHandler(Handler{Store: st, Writer: w, Salts: NewSalts(st.DB), Log: log,
+			TrustRequest: func(*http.Request) bool { return trusted }})
+		for _, ip := range []string{"198.51.100.1", "198.51.100.2"} {
+			req := httptest.NewRequest(http.MethodPost, "/api/event", strings.NewReader(`{"n":"pageview","u":"https://example.com/","d":"example.com"}`))
+			req.Header.Set("User-Agent", chromeUA)
+			req.Header.Set("X-Forwarded-For", ip)
+			req.RemoteAddr = "203.0.113.9:1234" // the sending server
+			h.ServeHTTP(httptest.NewRecorder(), req)
+		}
+		w.Close()
+		var visitors int
+		st.DB.QueryRow(`SELECT count(DISTINCT visitor_id) FROM events WHERE site_id = ?`, site.ID).Scan(&visitors)
+		want := 1
+		if trusted {
+			want = 2
+		}
+		if visitors != want {
+			t.Errorf("trusted=%v: %d visitors, want %d", trusted, visitors, want)
+		}
+		st.Close()
+	}
+}

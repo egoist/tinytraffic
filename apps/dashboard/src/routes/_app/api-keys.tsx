@@ -8,7 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/com
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { Input, Label } from "~/components/ui/input";
 import { Skeleton } from "~/components/ui/skeleton";
-import { api, type APIKey } from "~/lib/api";
+import { api, type APIKey, type APIKeyScope } from "~/lib/api";
+import { cn } from "~/lib/utils";
 import { timeAgo } from "~/lib/format";
 import { ready } from "~/lib/query";
 
@@ -16,13 +17,39 @@ export const Route = createFileRoute("/_app/api-keys")({
   component: APIKeys,
 });
 
-const endpoints = [
+const endpoints: [method: string, path: string, what: string, write?: boolean][] = [
   ["GET", "/api/v1/sites", "Sites and their last-24h visitors"],
   ["GET", "/api/v1/sites/{domain}/aggregate", "Visitors, visits, pageviews, bounce rate, duration"],
   ["GET", "/api/v1/sites/{domain}/timeseries", "The same metrics per hour, day or month"],
   ["GET", "/api/v1/sites/{domain}/breakdown/{dimension}", "Top pages, sources, countries, …"],
   ["GET", "/api/v1/sites/{domain}/realtime", "Visitors in the last 5 minutes"],
+  ["POST", "/api/v1/sites", "Add a site", true],
+  ["PATCH", "/api/v1/sites/{domain}", "Change its timezone", true],
+  ["DELETE", "/api/v1/sites/{domain}", "Delete a site and its stats", true],
+  ["POST", "/api/event", "Send events for your visitors from a server", true],
 ];
+
+const scopes: { value: APIKeyScope; label: string; description: string }[] = [
+  { value: "read", label: "Read only", description: "View stats for every site." },
+  {
+    value: "write",
+    label: "Read & write",
+    description: "Also add, change and delete sites, and send events from your server on behalf of visitors.",
+  },
+];
+
+function ScopeBadge(props: { scope: APIKeyScope }) {
+  return (
+    <span
+      class={cn(
+        "rounded-full border px-2 py-0.5 text-[11px] font-medium",
+        props.scope === "write" ? "border-foreground/20 text-foreground" : "text-muted-foreground",
+      )}
+    >
+      {props.scope === "write" ? "Read & write" : "Read only"}
+    </span>
+  );
+}
 
 function APIKeys() {
   const keys = useQuery(() => ({ queryKey: ["keys"], queryFn: api.keys }));
@@ -40,7 +67,7 @@ function APIKeys() {
         </Link>
         <h1 class="mt-3 text-2xl font-semibold tracking-tight">API keys</h1>
         <p class="mt-1 text-sm text-muted-foreground">
-          Read your stats from scripts and other apps. Keys are read-only and work for every site.
+          Use your stats from scripts and other apps. Keys work for every site.
         </p>
       </div>
 
@@ -74,6 +101,7 @@ function APIKeys() {
                         <div class="min-w-0 flex-1">
                           <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                             <span class="truncate font-medium">{key.name}</span>
+                            <ScopeBadge scope={key.scope} />
                             <code class="font-mono text-xs text-muted-foreground">{key.prefix}…</code>
                           </div>
                           <p class="mt-0.5 text-xs text-muted-foreground">
@@ -110,11 +138,18 @@ function APIKeys() {
             <table class="w-full text-sm">
               <tbody class="divide-y">
                 <For each={endpoints}>
-                  {([method, path, what]) => (
+                  {([method, path, what, write]) => (
                     <tr>
                       <td class="py-2.5 pr-2 pl-4 align-top font-mono text-xs text-muted-foreground">{method}</td>
                       <td class="py-2.5 pr-4 align-top font-mono text-xs whitespace-nowrap">{path}</td>
-                      <td class="py-2.5 pr-4 align-top text-muted-foreground">{what}</td>
+                      <td class="py-2.5 pr-4 align-top text-muted-foreground">
+                        {what}
+                        <Show when={write}>
+                          <span class="ml-2 align-middle">
+                            <ScopeBadge scope="write" />
+                          </span>
+                        </Show>
+                      </td>
                     </tr>
                   )}
                 </For>
@@ -139,8 +174,9 @@ function APIKeys() {
 function CreateKeyDialog(props: { onClose: () => void }) {
   const qc = useQueryClient();
   const [name, setName] = createSignal("");
+  const [scope, setScope] = createSignal<APIKeyScope>("read");
   const create = useMutation(() => ({
-    mutationFn: () => api.createKey(name().trim()),
+    mutationFn: () => api.createKey(name().trim(), scope()),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["keys"] }),
   }));
   return (
@@ -173,6 +209,32 @@ function CreateKeyDialog(props: { onClose: () => void }) {
                     onInput={(e) => setName(e.currentTarget.value)}
                   />
                 </div>
+                <fieldset class="grid gap-2">
+                  <legend class="mb-2 text-sm font-medium">Access</legend>
+                  <For each={scopes}>
+                    {(s) => (
+                      <label
+                        class={cn(
+                          "flex cursor-pointer gap-3 rounded-lg border p-3 transition-colors hover:bg-accent/50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring/50",
+                          scope() === s.value && "border-foreground/30 bg-accent/40",
+                        )}
+                      >
+                        <input
+                          type="radio"
+                          name="scope"
+                          value={s.value}
+                          checked={scope() === s.value}
+                          onChange={() => setScope(s.value)}
+                          class="mt-0.5 accent-foreground"
+                        />
+                        <span class="grid gap-0.5">
+                          <span class="text-sm font-medium">{s.label}</span>
+                          <span class="text-xs text-muted-foreground">{s.description}</span>
+                        </span>
+                      </label>
+                    )}
+                  </For>
+                </fieldset>
                 <Show when={create.error}>
                   <p class="text-sm text-destructive">{create.error?.message}</p>
                 </Show>

@@ -65,10 +65,13 @@ export type ServerInfo = {
   geoip: { enabled: boolean; attribution: { text: string; url: string } };
 };
 
+export type APIKeyScope = "read" | "write";
+
 export type APIKey = {
   id: number;
   name: string;
   prefix: string;
+  scope: APIKeyScope;
   created_at: string;
   last_used_at: string | null;
 };
@@ -110,6 +113,7 @@ export const api = {
   info: () => request<ServerInfo>("/api/info"),
 
   keys: () => request<APIKey[]>("/api/keys"),
-  createKey: (name: string) => request<{ key: APIKey; token: string }>("/api/keys", { method: "POST", json: { name } }),
+  createKey: (name: string, scope: APIKeyScope) =>
+    request<{ key: APIKey; token: string }>("/api/keys", { method: "POST", json: { name, scope } }),
   deleteKey: (id: number) => request(`/api/keys/${id}`, { method: "DELETE" }),
 };

@@ -1,19 +1,27 @@
 # tinytraffic API
 
-A read-only HTTP API for your stats, for scripts, reports and other apps. It
-returns the same numbers as the dashboard.
+An HTTP API for scripts, reports and other apps. It returns the same numbers
+as the dashboard and can manage sites.
 
 ## Authentication
 
 Create a key in the dashboard under **Account → API keys**. A key is shown
-once, starts with `tt_`, and can read every site. Send it as a bearer token:
+once, starts with `tt_`, and works for every site. There are two kinds:
+
+| Access | Can |
+|---|---|
+| **Read only** | Read stats |
+| **Read & write** | Also [add, change and delete sites](#sites), and [send events on behalf of visitors](#sending-events) |
+
+Send the key as a bearer token:
 
 ```sh
 curl -H "Authorization: Bearer $TINYTRAFFIC_KEY" \
   "https://stats.example.com/api/v1/sites/example.com/aggregate?period=30d"
 ```
 
-A missing, wrong or revoked key gets `401`:
+A missing, wrong or revoked key gets `401`, and a read-only key used for a
+write gets `403`:
 
 ```json
 { "error": "missing or invalid API key" }
@@ -79,6 +87,30 @@ Every stats response includes a `query` object describing the resolved range:
   }
 ]
 ```
+
+### Sites
+
+Write access needed. Bodies are JSON (`Content-Type: application/json`).
+
+`POST /api/v1/sites` adds a site. The domain is normalized (no scheme, no
+`www.`); `timezone` is an IANA name and defaults to `UTC`. Returns `201`, or
+`409` if the site exists.
+
+```sh
+curl -X POST https://stats.example.com/api/v1/sites \
+  -H "Authorization: Bearer $TINYTRAFFIC_KEY" -H "Content-Type: application/json" \
+  -d '{"domain": "example.com", "timezone": "Europe/Berlin"}'
+```
+
+```json
+{ "id": 1, "domain": "example.com", "timezone": "Europe/Berlin", "created_at": "2026-11-10T10:27:15.652313Z" }
+```
+
+`PATCH /api/v1/sites/{domain}` changes the reporting timezone:
+`{"timezone": "Asia/Tokyo"}`.
+
+`DELETE /api/v1/sites/{domain}` deletes the site and all of its stats. This
+can't be undone.
 
 ### Aggregate
 
@@ -185,22 +217,30 @@ Errors are JSON with an `error` message:
 |---|---|
 | `400` | Bad parameter, e.g. an unknown `period`, filter or dimension |
 | `401` | Missing, wrong or revoked API key |
+| `403` | A read-only key tried to write |
 | `404` | No such site or endpoint |
+| `409` | The site already exists |
 | `429` | Rate limit exceeded |
 
 ## Sending events
 
-Recording events doesn't use API keys. The tracker script posts to
-`POST /api/event`, which also accepts requests from your own code:
+`POST /api/event` records events. It's what the tracker script calls, so it
+needs no key. Your own code can use it too:
 
 ```sh
 curl -X POST https://stats.example.com/api/event \
+  -H "Authorization: Bearer $TINYTRAFFIC_KEY" \
   -H "User-Agent: $VISITOR_USER_AGENT" \
+  -H "X-Forwarded-For: $VISITOR_IP" \
   -d '{"name": "Signup", "url": "https://example.com/pricing", "domain": "example.com", "props": {"plan": "pro"}}'
 ```
 
 It accepts Plausible's event format (`name`, `url`, `domain`, `referrer`,
 `props`, or the short `n`, `u`, `d`, `r`, `p`) and always answers `202`.
-Visitors are identified by IP and user agent, so a call from your server
-counts as your server visiting unless the request passes the visitor's details
-through a trusted proxy (`TT_TRUST_PROXY`).
+
+Visitors are identified by IP and user agent, and their location comes from
+the IP. When you send events from a server, pass the visitor's user agent as
+`User-Agent` and their IP as `X-Forwarded-For`, **with a read & write key**.
+Without one, `X-Forwarded-For` is ignored (anyone could fake it), so every
+event would look like your server visiting. The IP is used for the visitor
+hash and location, then discarded.
