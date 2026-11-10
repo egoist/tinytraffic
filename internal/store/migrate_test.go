@@ -70,7 +70,7 @@ func TestClickHouseSharedByTwoProcesses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := b.reload(); err != nil { // what the refresh loop does
+	if err := b.Refresh(); err != nil {
 		t.Fatal(err)
 	}
 	if got, ok := b.SiteByDomain("example.com"); !ok || got.ID != site.ID {

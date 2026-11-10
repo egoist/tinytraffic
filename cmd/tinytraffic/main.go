@@ -254,7 +254,7 @@ func passwordCmd(args []string) error {
 	}
 	fmt.Println("Password updated. Existing sessions are signed out.")
 	if st.Events.Backend == store.ClickHouse {
-		fmt.Println("A server that is running keeps the old password until it restarts.")
+		fmt.Println("A running server picks it up within 10 seconds.")
 	}
 	return nil
 }

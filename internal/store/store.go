@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"sync"
 	"time"
 
@@ -46,6 +47,9 @@ type Store struct {
 
 	stop      chan struct{}
 	closeOnce sync.Once
+
+	hooksMu sync.Mutex
+	hooks   []func()
 }
 
 // meta stores everything but events: sites, aliases, API keys, settings and
@@ -153,8 +157,6 @@ func (s *Store) reload() error {
 	return nil
 }
 
-// refresh picks up sites and API keys changed by other processes, such as
-// the previous instance during a rolling deploy.
 func (s *Store) refresh() {
 	t := time.NewTicker(refreshInterval)
 	defer t.Stop()
@@ -163,9 +165,32 @@ func (s *Store) refresh() {
 		case <-s.stop:
 			return
 		case <-t.C:
-			s.reload()
+			s.Refresh()
 		}
 	}
+}
+
+// Refresh picks up changes made by other processes, such as the previous
+// instance during a rolling deploy or a command run alongside the server:
+// it reloads sites and API keys, then runs the OnRefresh callbacks. A
+// ClickHouse store does this every 10 seconds on its own.
+func (s *Store) Refresh() error {
+	err := s.reload()
+	s.hooksMu.Lock()
+	hooks := slices.Clone(s.hooks)
+	s.hooksMu.Unlock()
+	for _, fn := range hooks {
+		fn()
+	}
+	return err
+}
+
+// OnRefresh registers fn to run on every Refresh, to update data cached
+// outside the store.
+func (s *Store) OnRefresh(fn func()) {
+	s.hooksMu.Lock()
+	s.hooks = append(s.hooks, fn)
+	s.hooksMu.Unlock()
 }
 
 // --- settings ---

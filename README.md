@@ -163,9 +163,9 @@ ClickHouse, the volume is no longer needed, unless you keep a custom
 
 While two processes overlap, each keeps its own visit sessions in memory, so
 a visitor whose requests reach both in those seconds may be counted as two
-visits. Sites and API keys changed in one process show up in the other within
-10 seconds. The `password` command works while the server runs, but a running
-server keeps the old password until it restarts.
+visits. Sites, API keys and the password changed in one process show up in
+the other within 10 seconds. That also means commands like `password` and
+`seed` work while the server runs.
 
 ### Commands
 

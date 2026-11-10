@@ -56,7 +56,21 @@ func NewAuth(s *store.Store) (*Auth, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Auth{store: s, secret: secret, hash: hash, failures: map[string][]time.Time{}}, nil
+	a := &Auth{store: s, secret: secret, hash: hash, failures: map[string][]time.Time{}}
+	// Pick up a password set by another process (another instance, or the
+	// password command) when the store refreshes.
+	s.OnRefresh(a.reloadHash)
+	return a, nil
+}
+
+func (a *Auth) reloadHash() {
+	hash, err := a.store.Setting("password_hash")
+	if err != nil {
+		return
+	}
+	a.mu.Lock()
+	a.hash = hash
+	a.mu.Unlock()
 }
 
 func (a *Auth) HasPassword() bool {
