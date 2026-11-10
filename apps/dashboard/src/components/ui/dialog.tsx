@@ -1,6 +1,7 @@
 import * as DialogPrimitive from "@kobalte/core/dialog";
 import { X } from "lucide-solid";
 import { splitProps, type ComponentProps, type JSX } from "solid-js";
+import { t } from "~/lib/i18n";
 import { cn } from "~/lib/utils";
 
 export const Dialog = DialogPrimitive.Root;
@@ -22,7 +23,7 @@ export function DialogContent(props: ComponentProps<"div"> & { children: JSX.Ele
           {local.children}
           <DialogPrimitive.CloseButton class="absolute top-4 right-4 grid size-7 cursor-pointer place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
             <X class="size-4" />
-            <span class="sr-only">Close</span>
+            <span class="sr-only">{t().common.close}</span>
           </DialogPrimitive.CloseButton>
         </DialogPrimitive.Content>
       </div>

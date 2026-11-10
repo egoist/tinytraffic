@@ -8,6 +8,7 @@ import { Button } from "~/components/ui/button";
 import { api, type LiveEvent, type LiveSession } from "~/lib/api";
 import { valueLabel } from "~/lib/dims";
 import { countryName, flag, formatNumber } from "~/lib/format";
+import { t } from "~/lib/i18n";
 import { ready } from "~/lib/query";
 import { cn } from "~/lib/utils";
 
@@ -49,17 +50,18 @@ function arcDegrees(a: LatLon, b: LatLon) {
 // IDs become CSS idents, so no dots.
 const placeId = (p: LatLon) => `p${Math.round(p.lat * 100)}_${Math.round(p.lon * 100)}`;
 const placeName = (p: { city: string; region: string; country: string }) =>
-  p.city || p.region || countryName(p.country) || "Somewhere";
+  p.city || p.region || countryName(p.country) || t().live.somewhere;
 const eventKey = (e: LiveEvent) => `${e.ts}|${e.session}|${e.name}|${e.page}`;
 
 /** "now", "12s", "4m", "1h 5m". */
 function short(ms: number) {
+  const u = t().units;
   const s = Math.max(0, Math.round(ms / 1000));
-  if (s < 5) return "now";
-  if (s < 60) return `${s}s`;
+  if (s < 5) return u.now;
+  if (s < 60) return `${s}${u.s}`;
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m`;
-  return `${Math.floor(m / 60)}h ${m % 60}m`;
+  if (m < 60) return `${m}${u.m}`;
+  return `${Math.floor(m / 60)}${u.h}${u.sep}${m % 60}${u.m}`;
 }
 
 const deviceIcons: Record<string, (p: { class?: string }) => JSX.Element> = {
@@ -233,7 +235,7 @@ function LivePage() {
           class="pointer-events-none absolute top-1/2 left-1/2 size-[min(140vw,140vh)] -translate-x-1/2 -translate-y-1/2 bg-[radial-gradient(closest-side,var(--chart-wash),transparent)] opacity-70"
         />
         <Globe
-          label={`Globe of visitors on ${domain() ?? "this site"} right now`}
+          label={t().live.globe(domain())}
           class="w-[min(calc(100vw-2rem),calc(100dvh-14rem),56rem)] lg:w-[min(calc(100vw-38rem),calc(100dvh-13rem),56rem)]"
           mapSamples={20000}
           markers={markers()}
@@ -266,38 +268,38 @@ function LivePage() {
 
       {/* Top bar */}
       <header class="absolute inset-x-0 top-0 z-30 flex h-16 items-center gap-3 px-4 sm:px-6">
-        <Link to="/" class="rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="All sites">
+        <Link to="/" class="rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={t().header.allSites}>
           <LogoMark class="sm:hidden" />
           <Logo class="max-sm:hidden" />
         </Link>
         <div class="absolute left-1/2 flex h-9 -translate-x-1/2 items-center gap-3 rounded-full bg-card px-4 text-sm whitespace-nowrap shadow-xs ring ring-line">
-          <span class="flex items-center gap-2" title="Visitors in the last 5 minutes">
+          <span class="flex items-center gap-2" title={t().realtime.title}>
             <span class="relative flex size-2">
               <span class="absolute inline-flex size-full animate-ping rounded-full bg-live opacity-60" />
               <span class="relative inline-flex size-2 rounded-full bg-live" />
             </span>
             <span>
               <span class="font-medium tabular">{data() ? formatNumber(data()!.visitors) : "–"}</span>{" "}
-              <span class="text-muted-foreground">online</span>
+              <span class="text-muted-foreground">{t().live.online}</span>
             </span>
           </span>
           <span class="h-4 w-px bg-border max-sm:hidden" />
           <span class="max-w-[30vw] truncate font-medium max-sm:hidden">{domain() ?? "…"}</span>
         </div>
-        <Button variant="ghost" size="sm" class="ml-auto text-muted-foreground max-sm:px-2" onClick={close} aria-label="Close">
-          <X /> <span class="max-sm:hidden">Close</span>
+        <Button variant="ghost" size="sm" class="ml-auto text-muted-foreground max-sm:px-2" onClick={close} aria-label={t().common.close}>
+          <X /> <span class="max-sm:hidden">{t().common.close}</span>
         </Button>
       </header>
 
       {/* Left: what this is and how to use it */}
       <aside class="absolute top-20 left-6 z-10 hidden w-64 lg:block">
-        <h1 class="text-xl font-semibold tracking-tight">Live view</h1>
+        <h1 class="text-xl font-semibold tracking-tight">{t().live.title}</h1>
         <ul class="mt-3 grid gap-2 text-sm text-muted-foreground">
           <li class="flex items-center gap-2">
-            <Clock class="size-4 shrink-0" /> Last 5 minutes of activity
+            <Clock class="size-4 shrink-0" /> {t().live.lastMinutes}
           </li>
           <li class="flex items-center gap-2">
-            <MousePointerClick class="size-4 shrink-0" /> Click a visitor for details
+            <MousePointerClick class="size-4 shrink-0" /> {t().live.clickVisitor}
           </li>
           <li>
             <button
@@ -308,18 +310,18 @@ function LivePage() {
               <Show when={spinning()} fallback={<Play class="size-4 shrink-0" />}>
                 <Pause class="size-4 shrink-0" />
               </Show>
-              {spinning() ? "Stop spinning" : "Start spinning"}
+              {spinning() ? t().live.stopSpinning : t().live.startSpinning}
             </button>
           </li>
           <li class="flex items-center gap-2">
-            <Kbd>Esc</Kbd> to close
+            {t().live.toClose(<Kbd>Esc</Kbd>)}
           </li>
           <li class="flex items-center gap-2">
-            <Kbd>L</Kbd> to toggle
+            {t().live.toToggle(<Kbd>L</Kbd>)}
           </li>
           <Show when={ready(info)?.geoip.enabled === false}>
             <li class="flex items-start gap-2 pt-2 text-xs">
-              <MapPinOff class="mt-px size-4 shrink-0" /> Placing visitors on the globe needs a GeoIP database. See the README.
+              <MapPinOff class="mt-px size-4 shrink-0" /> {t().live.geoipNeeded}
             </li>
           </Show>
         </ul>
@@ -329,19 +331,19 @@ function LivePage() {
       <Show when={sessions().length > 0}>
         <aside class="absolute top-20 right-6 z-10 hidden w-64 gap-6 lg:grid">
           <TopList
-            title="Pages"
+            title={t().live.pages}
             rows={topPages()}
             total={sessions().length}
             label={(v) => <span class="truncate" title={v}>{valueLabel("page", v)}</span>}
           />
           <TopList
-            title="Sources"
+            title={t().live.sources}
             rows={topSources()}
             total={sessions().length}
             label={(v) => <span class="truncate">{valueLabel("source", v)}</span>}
           />
           <TopList
-            title="Countries"
+            title={t().live.countries}
             rows={topCountries()}
             total={sessions().length}
             label={(v) => (
@@ -357,14 +359,14 @@ function LivePage() {
       <div class="absolute inset-x-0 bottom-6 z-20 flex flex-col items-center gap-2 px-4" aria-live="polite">
         <Show when={live.error?.message === "site not found"}>
           <p class="text-sm text-muted-foreground">
-            This site doesn't exist.{" "}
+            {t().common.siteNotFound}{" "}
             <Link to="/" class="underline underline-offset-4 hover:text-foreground">
-              Back to all sites
+              {t().common.backToSites}
             </Link>
           </p>
         </Show>
         <Show when={data() && feed().length === 0}>
-          <p class="text-sm text-muted-foreground">No activity in the last 5 minutes. New visits show up here within seconds.</p>
+          <p class="text-sm text-muted-foreground">{t().live.noActivity}</p>
         </Show>
         <For each={feed()}>
           {(key, i) => {
@@ -383,18 +385,14 @@ function LivePage() {
                 }}
               >
                 <span class="text-base leading-none">{flag(session()?.country ?? "")}</span>
-                <span class="min-w-0 truncate">
-                  <span class="text-muted-foreground">Someone in </span>
-                  <span class="font-medium">{session() ? placeName(session()!) : "a new place"}</span>
-                  <Show
-                    when={e.name !== "pageview"}
-                    fallback={<span class="text-muted-foreground"> viewed </span>}
-                  >
-                    <span class="text-muted-foreground"> triggered </span>
-                    <span class="font-medium">{e.name}</span>
-                    <span class="text-muted-foreground"> on </span>
-                  </Show>
-                  <span class="font-medium">{e.page}</span>
+                <span class="min-w-0 truncate text-muted-foreground">
+                  {(() => {
+                    const place = <span class="font-medium text-foreground">{session() ? placeName(session()!) : t().live.aNewPlace}</span>;
+                    const page = <span class="font-medium text-foreground">{e.page}</span>;
+                    return e.name === "pageview"
+                      ? t().live.viewed(place, page)
+                      : t().live.triggered(place, <span class="font-medium text-foreground">{e.name}</span>, page);
+                  })()}
                 </span>
                 <span class="shrink-0 text-xs text-muted-foreground tabular">{short(now() - new Date(e.ts).getTime())}</span>
               </button>
@@ -425,7 +423,7 @@ function Sticker(props: { place: Place; pulse: number; selected: boolean; onClic
         props.selected && "z-[15] ring-2 ring-ring hover:ring-ring",
       )}
       style={pinnedTo(props.place.id)}
-      aria-label={`${n()} ${n() === 1 ? "visitor" : "visitors"} in ${placeName(props.place)}`}
+      aria-label={t().live.visitorsIn(n(), placeName(props.place))}
       aria-pressed={props.selected}
       onClick={props.onClick}
     >
@@ -448,9 +446,10 @@ function PlaceCard(props: { place: Place; now: number; onClose: () => void }) {
   const MAX = 4;
   const where = () => {
     const p = props.place;
-    if (p.others.length > 2) return `and ${p.others.slice(0, 2).join(", ")}, + ${p.others.length - 2} more`;
-    if (p.others.length) return `and ${p.others.join(", ")}`;
-    return [p.city && p.region !== p.city ? p.region : "", countryName(p.country)].filter(Boolean).join(", ");
+    const sep = t().common.listSep;
+    if (p.others.length > 2) return t().live.andMore(p.others.slice(0, 2).join(sep), p.others.length - 2);
+    if (p.others.length) return t().live.andOthers(p.others.join(sep));
+    return [p.city && p.region !== p.city ? p.region : "", countryName(p.country)].filter(Boolean).join(sep);
   };
   return (
     <div
@@ -464,7 +463,7 @@ function PlaceCard(props: { place: Place; now: number; onClose: () => void }) {
           : undefined
       }
       role="dialog"
-      aria-label={`Visitors in ${placeName(props.place)}`}
+      aria-label={t().live.visitorsAt(placeName(props.place))}
     >
       <div class="flex items-start gap-3 px-4 pt-3 pb-2">
         <span class="mt-0.5 text-xl leading-none">{flag(props.place.country)}</span>
@@ -474,7 +473,7 @@ function PlaceCard(props: { place: Place; now: number; onClose: () => void }) {
             <div class="truncate text-xs text-muted-foreground">{where()}</div>
           </Show>
         </div>
-        <Button variant="ghost" size="icon-sm" class="-mt-1 -mr-2 size-7" aria-label="Close" onClick={props.onClose}>
+        <Button variant="ghost" size="icon-sm" class="-mt-1 -mr-2 size-7" aria-label={t().common.close} onClick={props.onClose}>
           <X />
         </Button>
       </div>
@@ -488,12 +487,12 @@ function PlaceCard(props: { place: Place; now: number; onClose: () => void }) {
                 <div class="flex items-center gap-2">
                   <span
                     class={cn("size-1.5 shrink-0 rounded-full", active() ? "bg-live" : "bg-muted-foreground/40")}
-                    title={active() ? "Active in the last minute" : `Last seen ${short(props.now - new Date(s.last_seen).getTime())} ago`}
+                    title={active() ? t().live.activeLastMinute : t().live.lastSeen(short(props.now - new Date(s.last_seen).getTime()))}
                   />
                   <span class="min-w-0 flex-1 truncate text-sm font-medium" title={s.page}>
                     {s.page}
                   </span>
-                  <span class="shrink-0 text-xs text-muted-foreground tabular" title="Time on site">
+                  <span class="shrink-0 text-xs text-muted-foreground tabular" title={t().live.timeOnSite}>
                     {short(props.now - new Date(s.started_at).getTime())}
                   </span>
                 </div>
@@ -503,8 +502,8 @@ function PlaceCard(props: { place: Place; now: number; onClose: () => void }) {
                     {[
                       props.place.others.length ? placeName(s) : "",
                       valueLabel("source", s.source),
-                      [s.browser, s.os].filter(Boolean).join(" on "),
-                      `${s.pageviews} ${s.pageviews === 1 ? "page" : "pages"}`,
+                      s.browser && s.os ? t().live.browserOn(s.browser, s.os) : s.browser || s.os,
+                      t().live.pageCount(s.pageviews),
                     ]
                       .filter(Boolean)
                       .join(" · ")}
@@ -515,7 +514,7 @@ function PlaceCard(props: { place: Place; now: number; onClose: () => void }) {
           }}
         </For>
         <Show when={props.place.sessions.length > MAX}>
-          <li class="px-2.5 py-1.5 text-xs text-muted-foreground">+ {props.place.sessions.length - MAX} more</li>
+          <li class="px-2.5 py-1.5 text-xs text-muted-foreground">{t().live.more(props.place.sessions.length - MAX)}</li>
         </Show>
       </ul>
     </div>

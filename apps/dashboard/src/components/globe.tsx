@@ -1,5 +1,6 @@
 import createGlobe, { type Globe as Cobe } from "cobe";
 import { createEffect, createSignal, onCleanup, onMount, Show, type JSX } from "solid-js";
+import { t } from "~/lib/i18n";
 import { cn } from "~/lib/utils";
 
 export type LatLon = { lat: number; lon: number };
@@ -240,7 +241,7 @@ function GlobeInstance(props: GlobeProps & { size: number }) {
   return (
     <Show
       when={!failed()}
-      fallback={<p class="grid size-full place-items-center text-sm text-muted-foreground">Your browser can't show the globe.</p>}
+      fallback={<p class="grid size-full place-items-center text-sm text-muted-foreground">{t().globe.unsupported}</p>}
     >
       <canvas
         ref={canvas}

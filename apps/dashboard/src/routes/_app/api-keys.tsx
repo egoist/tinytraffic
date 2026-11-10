@@ -11,31 +11,29 @@ import { Skeleton } from "~/components/ui/skeleton";
 import { api, type APIKey, type APIKeyScope } from "~/lib/api";
 import { cn } from "~/lib/utils";
 import { timeAgo } from "~/lib/format";
+import { errorMessage, t } from "~/lib/i18n";
 import { ready } from "~/lib/query";
 
 export const Route = createFileRoute("/_app/api-keys")({
   component: APIKeys,
 });
 
-const endpoints: [method: string, path: string, what: string, write?: boolean][] = [
-  ["GET", "/api/v1/sites", "Sites and their last-24h visitors"],
-  ["GET", "/api/v1/sites/{site}/aggregate", "Visitors, visits, pageviews, bounce rate, duration"],
-  ["GET", "/api/v1/sites/{site}/timeseries", "The same metrics per hour, day or month"],
-  ["GET", "/api/v1/sites/{site}/breakdown/{dimension}", "Top pages, sources, countries, …"],
-  ["GET", "/api/v1/sites/{site}/realtime", "Visitors in the last 5 minutes"],
-  ["POST", "/api/v1/sites", "Add a site", true],
-  ["PATCH", "/api/v1/sites/{site}", "Change its domain or timezone", true],
-  ["DELETE", "/api/v1/sites/{site}", "Delete a site and its stats", true],
-  ["POST", "/api/event", "Send events for your visitors from a server", true],
+/** Descriptions are `t().apiKeys.endpoints[i]`, in this order. */
+const endpoints: [method: string, path: string, write?: boolean][] = [
+  ["GET", "/api/v1/sites"],
+  ["GET", "/api/v1/sites/{site}/aggregate"],
+  ["GET", "/api/v1/sites/{site}/timeseries"],
+  ["GET", "/api/v1/sites/{site}/breakdown/{dimension}"],
+  ["GET", "/api/v1/sites/{site}/realtime"],
+  ["POST", "/api/v1/sites", true],
+  ["PATCH", "/api/v1/sites/{site}", true],
+  ["DELETE", "/api/v1/sites/{site}", true],
+  ["POST", "/api/event", true],
 ];
 
-const scopes: { value: APIKeyScope; label: string; description: string }[] = [
-  { value: "read", label: "Read only", description: "View stats for every site." },
-  {
-    value: "write",
-    label: "Read & write",
-    description: "Also add, change and delete sites, and send events from your server on behalf of visitors.",
-  },
+const scopes = (): { value: APIKeyScope; label: string; description: string }[] => [
+  { value: "read", label: t().apiKeys.readOnly, description: t().apiKeys.readOnlyDescription },
+  { value: "write", label: t().apiKeys.readWrite, description: t().apiKeys.readWriteDescription },
 ];
 
 function ScopeBadge(props: { scope: APIKeyScope }) {
@@ -46,7 +44,7 @@ function ScopeBadge(props: { scope: APIKeyScope }) {
         props.scope === "write" ? "border-foreground/20 text-foreground" : "text-muted-foreground",
       )}
     >
-      {props.scope === "write" ? "Read & write" : "Read only"}
+      {props.scope === "write" ? t().apiKeys.readWrite : t().apiKeys.readOnly}
     </span>
   );
 }
@@ -63,22 +61,22 @@ function APIKeys() {
     <div class="mx-auto flex max-w-3xl flex-col gap-6">
       <div>
         <Link to="/" class="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeft class="size-4" /> Sites
+          <ArrowLeft class="size-4" /> {t().apiKeys.back}
         </Link>
-        <h1 class="mt-3 text-2xl font-semibold tracking-tight">API keys</h1>
+        <h1 class="mt-3 text-2xl font-semibold tracking-tight">{t().apiKeys.title}</h1>
         <p class="mt-1 text-sm text-muted-foreground">
-          Use your stats from scripts and other apps. Keys work for every site.
+          {t().apiKeys.subtitle}
         </p>
       </div>
 
       <Card>
         <div class="flex items-center justify-between gap-4 py-2.5 pr-2.5 pl-5">
           <div class="grid gap-1">
-            <CardTitle>Keys</CardTitle>
-            <CardDescription>Revoke a key to cut off the app using it.</CardDescription>
+            <CardTitle>{t().apiKeys.keys}</CardTitle>
+            <CardDescription>{t().apiKeys.keysDescription}</CardDescription>
           </div>
           <Button size="sm" onClick={() => setCreating(true)}>
-            <Plus /> Create key
+            <Plus /> {t().apiKeys.create}
           </Button>
         </div>
         <CardContent>
@@ -89,7 +87,7 @@ function APIKeys() {
             <Match when={ready(keys)?.length === 0}>
               <div class="flex flex-col items-center rounded-lg border border-dashed py-10 text-center">
                 <KeyRound class="size-5 text-muted-foreground" />
-                <p class="mt-3 text-sm text-muted-foreground">No keys yet.</p>
+                <p class="mt-3 text-sm text-muted-foreground">{t().apiKeys.empty}</p>
               </div>
             </Match>
             <Match when={ready(keys)}>
@@ -105,12 +103,12 @@ function APIKeys() {
                             <code class="font-mono text-xs text-muted-foreground">{key.prefix}…</code>
                           </div>
                           <p class="mt-0.5 text-xs text-muted-foreground">
-                            Created {timeAgo(key.created_at)} ·{" "}
-                            {key.last_used_at ? `last used ${timeAgo(key.last_used_at)}` : "never used"}
+                            {t().apiKeys.created(timeAgo(key.created_at))} ·{" "}
+                            {key.last_used_at ? t().apiKeys.lastUsed(timeAgo(key.last_used_at)) : t().apiKeys.neverUsed}
                           </p>
                         </div>
                         <Button variant="ghost" size="sm" class="text-destructive hover:text-destructive" onClick={() => setRevoking(key)}>
-                          Revoke
+                          {t().apiKeys.revoke}
                         </Button>
                       </li>
                     )}
@@ -124,10 +122,12 @@ function APIKeys() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Quick start</CardTitle>
+          <CardTitle>{t().apiKeys.quickStart}</CardTitle>
           <CardDescription>
-            Send the key as a bearer token. Stats endpoints take the same <code class="font-mono text-xs">period</code> and{" "}
-            <code class="font-mono text-xs">f</code> (filter) parameters as the dashboard URL.
+            {t().apiKeys.quickStartDescription(
+              <code class="font-mono text-xs">period</code>,
+              <code class="font-mono text-xs">f</code>,
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent class="grid gap-5">
@@ -138,12 +138,12 @@ function APIKeys() {
             <table class="w-full text-sm">
               <tbody class="divide-y">
                 <For each={endpoints}>
-                  {([method, path, what, write]) => (
+                  {([method, path, write], i) => (
                     <tr>
                       <td class="py-2.5 pr-2 pl-4 align-top font-mono text-xs text-muted-foreground">{method}</td>
                       <td class="py-2.5 pr-4 align-top font-mono text-xs whitespace-nowrap">{path}</td>
                       <td class="py-2.5 pr-4 align-top text-muted-foreground">
-                        {what}
+                        {t().apiKeys.endpoints[i()]}
                         <Show when={write}>
                           <span class="ml-2 align-middle">
                             <ScopeBadge scope="write" />
@@ -157,8 +157,7 @@ function APIKeys() {
             </table>
           </div>
           <p class="text-xs text-muted-foreground">
-            Full reference: <code class="font-mono">docs/api.md</code> in the tinytraffic repository. Each key can make 600 requests
-            a minute.
+            {t().apiKeys.reference(<code class="font-mono">docs/api.md</code>)}
           </p>
         </CardContent>
       </Card>
@@ -187,8 +186,8 @@ function CreateKeyDialog(props: { onClose: () => void }) {
           fallback={
             <>
               <DialogHeader>
-                <DialogTitle>Create API key</DialogTitle>
-                <DialogDescription>Name it after the app that will use it, so you know what to revoke later.</DialogDescription>
+                <DialogTitle>{t().apiKeys.createTitle}</DialogTitle>
+                <DialogDescription>{t().apiKeys.createDescription}</DialogDescription>
               </DialogHeader>
               <form
                 class="grid gap-5"
@@ -198,10 +197,10 @@ function CreateKeyDialog(props: { onClose: () => void }) {
                 }}
               >
                 <div class="grid gap-2">
-                  <Label for="key-name">Name</Label>
+                  <Label for="key-name">{t().apiKeys.name}</Label>
                   <Input
                     id="key-name"
-                    placeholder="e.g. Weekly report script"
+                    placeholder={t().apiKeys.namePlaceholder}
                     autocomplete="off"
                     autofocus
                     maxLength={100}
@@ -210,8 +209,8 @@ function CreateKeyDialog(props: { onClose: () => void }) {
                   />
                 </div>
                 <fieldset class="grid gap-2">
-                  <legend class="mb-2 text-sm font-medium">Access</legend>
-                  <For each={scopes}>
+                  <legend class="mb-2 text-sm font-medium">{t().apiKeys.access}</legend>
+                  <For each={scopes()}>
                     {(s) => (
                       <label
                         class={cn(
@@ -236,14 +235,14 @@ function CreateKeyDialog(props: { onClose: () => void }) {
                   </For>
                 </fieldset>
                 <Show when={create.error}>
-                  <p class="text-sm text-destructive">{create.error?.message}</p>
+                  <p class="text-sm text-destructive">{errorMessage(create.error)}</p>
                 </Show>
                 <DialogFooter>
                   <Button variant="outline" onClick={props.onClose}>
-                    Cancel
+                    {t().common.cancel}
                   </Button>
                   <Button type="submit" disabled={!name().trim() || create.isPending}>
-                    Create key
+                    {t().apiKeys.create}
                   </Button>
                 </DialogFooter>
               </form>
@@ -253,12 +252,12 @@ function CreateKeyDialog(props: { onClose: () => void }) {
           {(token) => (
             <>
               <DialogHeader>
-                <DialogTitle>Copy your new key</DialogTitle>
-                <DialogDescription>This is the only time it's shown. Store it somewhere safe, like your app's secrets.</DialogDescription>
+                <DialogTitle>{t().apiKeys.copyTitle}</DialogTitle>
+                <DialogDescription>{t().apiKeys.copyDescription}</DialogDescription>
               </DialogHeader>
               <CodeBlock code={token()} />
               <DialogFooter>
-                <Button onClick={props.onClose}>Done</Button>
+                <Button onClick={props.onClose}>{t().apiKeys.done}</Button>
               </DialogFooter>
             </>
           )}
@@ -281,18 +280,18 @@ function RevokeDialog(props: { apiKey: APIKey; onClose: () => void }) {
     <Dialog open onOpenChange={(o) => !o && props.onClose()}>
       <DialogContent class="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Revoke “{props.apiKey.name}”?</DialogTitle>
-          <DialogDescription>Apps using this key stop working right away. This can't be undone.</DialogDescription>
+          <DialogTitle>{t().apiKeys.revokeTitle(props.apiKey.name)}</DialogTitle>
+          <DialogDescription>{t().apiKeys.revokeDescription}</DialogDescription>
         </DialogHeader>
         <Show when={revoke.error}>
-          <p class="text-sm text-destructive">{revoke.error?.message}</p>
+          <p class="text-sm text-destructive">{errorMessage(revoke.error)}</p>
         </Show>
         <DialogFooter>
           <Button variant="outline" onClick={props.onClose}>
-            Cancel
+            {t().common.cancel}
           </Button>
           <Button variant="destructive" disabled={revoke.isPending} onClick={() => revoke.mutate()}>
-            Revoke key
+            {t().apiKeys.revokeSubmit}
           </Button>
         </DialogFooter>
       </DialogContent>

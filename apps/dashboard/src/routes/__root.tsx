@@ -2,6 +2,7 @@ import { QueryClientProvider, type QueryClient } from "@tanstack/solid-query";
 import { HeadContent, Outlet, Scripts, createRootRouteWithContext } from "@tanstack/solid-router";
 import type { JSX } from "solid-js";
 import { HydrationScript } from "solid-js/web";
+import { langScript } from "~/lib/i18n";
 import { themeScript } from "~/lib/theme";
 import css from "~/styles.css?url";
 
@@ -21,7 +22,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "stylesheet", href: css },
       { rel: "icon", href: favicon },
     ],
-    scripts: [{ children: themeScript }],
+    scripts: [{ children: themeScript }, { children: langScript }],
   }),
   shellComponent: RootDocument,
   component: RootComponent,

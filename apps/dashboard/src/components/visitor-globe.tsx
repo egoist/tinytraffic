@@ -2,6 +2,7 @@ import { keepPreviousData, useQuery } from "@tanstack/solid-query";
 import { createMemo, createSignal, For, Show } from "solid-js";
 import { api, type LocationPoint, type StatsParams } from "~/lib/api";
 import { countryName, flag, formatNumber } from "~/lib/format";
+import { t } from "~/lib/i18n";
 import { ready } from "~/lib/query";
 import { cn } from "~/lib/utils";
 import { Globe } from "./globe";
@@ -35,7 +36,7 @@ export function VisitorGlobe(props: { domain: string; params: StatsParams; onFil
     <div class="flex flex-col items-center gap-4 sm:flex-row sm:items-stretch">
       <div class="relative w-full max-w-[300px] shrink-0 sm:w-[52%]">
         <Globe
-          label="Globe of visitor locations"
+          label={t().globe.locations}
           class="w-full"
           markers={markers()}
           focus={activePoint() ?? null}
@@ -61,7 +62,7 @@ export function VisitorGlobe(props: { domain: string; params: StatsParams; onFil
         </Globe>
         <Show when={query.isSuccess && points().length === 0}>
           <p class="pointer-events-none absolute inset-0 grid place-items-center text-sm text-muted-foreground">
-            No locations in this period
+            {t().globe.noLocations}
           </p>
         </Show>
       </div>
@@ -80,7 +81,7 @@ export function VisitorGlobe(props: { domain: string; params: StatsParams; onFil
                 onFocus={() => setActive(i())}
                 onBlur={() => setActive(null)}
                 onClick={() => (p.city ? props.onFilter("city", p.city) : props.onFilter("country", p.country))}
-                title={`Filter by ${label(p)}`}
+                title={t().breakdown.filterBy(label(p))}
               >
                 <span class="text-base leading-none">{flag(p.country)}</span>
                 <span class="min-w-0 flex-1 truncate">{label(p)}</span>
@@ -90,7 +91,7 @@ export function VisitorGlobe(props: { domain: string; params: StatsParams; onFil
           )}
         </For>
         <Show when={points().length > TOP}>
-          <li class="px-2 pt-1 text-xs text-muted-foreground">+ {formatNumber(points().length - TOP)} more cities</li>
+          <li class="px-2 pt-1 text-xs text-muted-foreground">{t().globe.moreCities(formatNumber(points().length - TOP))}</li>
         </Show>
       </ul>
     </div>

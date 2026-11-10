@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, Surface } fr
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { Input, Label, NativeSelect } from "~/components/ui/input";
 import { api, type Site } from "~/lib/api";
+import { errorMessage, t } from "~/lib/i18n";
 import { timezones } from "~/lib/timezones";
 import { ready } from "~/lib/query";
 
@@ -31,16 +32,16 @@ function Settings() {
           params={{ siteId: siteId() }}
           class="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
         >
-          <ArrowLeft class="size-4" /> Dashboard
+          <ArrowLeft class="size-4" /> {t().settings.dashboard}
         </Link>
-        <h1 class="mt-3 text-2xl font-semibold tracking-tight">Settings</h1>
+        <h1 class="mt-3 text-2xl font-semibold tracking-tight">{t().settings.title}</h1>
       </div>
 
       <Show when={ready(sites) && !site()}>
         <Surface class="p-10 text-center">
-          <p class="font-medium">This site doesn't exist.</p>
+          <p class="font-medium">{t().common.siteNotFound}</p>
           <Link to="/" class="mt-2 inline-block text-sm text-muted-foreground underline underline-offset-4">
-            Back to all sites
+            {t().common.backToSites}
           </Link>
         </Surface>
       </Show>
@@ -50,8 +51,8 @@ function Settings() {
           <>
             <Show when={search().welcome}>
               <Surface class="bg-chart-wash p-5 shadow-none ring-chart-1/30">
-                <p class="font-medium">{s().domain} is ready.</p>
-                <p class="mt-1 text-sm text-muted-foreground">Paste the snippet below into your site's &lt;head&gt; and you're done.</p>
+                <p class="font-medium">{t().settings.ready(s().domain)}</p>
+                <p class="mt-1 text-sm text-muted-foreground">{t().settings.pasteSnippet}</p>
               </Surface>
             </Show>
 
@@ -75,8 +76,8 @@ function TrackingCard(props: { siteId: string; domain: string; hasData: boolean 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Tracking snippet</CardTitle>
-        <CardDescription>Add it to every page, inside &lt;head&gt;. It's about 1 KB gzipped and sets no cookies.</CardDescription>
+        <CardTitle>{t().settings.trackingTitle}</CardTitle>
+        <CardDescription>{t().settings.trackingDescription}</CardDescription>
       </CardHeader>
       <CardContent class="grid gap-5">
         <CodeBlock code={trackingSnippet(props.domain)} />
@@ -86,22 +87,24 @@ function TrackingCard(props: { siteId: string; domain: string; hasData: boolean 
             fallback={
               <>
                 <LoaderCircle class="size-4 animate-spin text-muted-foreground" />
-                <span class="text-muted-foreground">Waiting for a pageview from {props.domain}…</span>
+                <span class="text-muted-foreground">{t().settings.waiting(props.domain)}</span>
               </>
             }
           >
             <CircleCheck class="size-4 text-positive" />
-            <span>Receiving data.</span>
+            <span>{t().settings.receiving}</span>
           </Show>
         </div>
         <div class="grid gap-2 border-t pt-5">
-          <h3 class="text-sm font-medium">Custom events</h3>
+          <h3 class="text-sm font-medium">{t().settings.customEvents}</h3>
           <p class="text-sm text-muted-foreground">
-            Track signups, purchases or anything else. They show up under Goals. Outbound link clicks are tracked automatically.
+            {t().settings.customEventsDescription}
           </p>
           <CodeBlock code={`tinytraffic("Signup", { props: { plan: "pro" } })`} />
           <p class="text-xs text-muted-foreground">
-            Exclude your own visits by running <code class="rounded bg-recessed px-1 py-0.5 ring ring-border">localStorage.tinytraffic_ignore = "true"</code> in your browser console on your site.
+            {t().settings.excludeOwn(
+              <code class="rounded bg-recessed px-1 py-0.5 ring ring-border">localStorage.tinytraffic_ignore = "true"</code>,
+            )}
           </p>
         </div>
       </CardContent>
@@ -128,11 +131,8 @@ function DomainCard(props: { site: Site }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Domain</CardTitle>
-        <CardDescription>
-          Moved your site? Change its domain here. Your stats stay, and events sent to the old domain still count, so
-          existing snippets keep working until you update them.
-        </CardDescription>
+        <CardTitle>{t().settings.domainTitle}</CardTitle>
+        <CardDescription>{t().settings.domainDescription}</CardDescription>
       </CardHeader>
       <CardContent class="grid gap-4">
         <form
@@ -143,7 +143,7 @@ function DomainCard(props: { site: Site }) {
           }}
         >
           <Input
-            aria-label="Domain"
+            aria-label={t().settings.domain}
             autocomplete="off"
             class="sm:max-w-xs"
             value={domain()}
@@ -151,17 +151,17 @@ function DomainCard(props: { site: Site }) {
             aria-invalid={save.isError}
           />
           <Button type="submit" variant="outline" disabled={!changed() || save.isPending}>
-            {save.isSuccess && !changed() ? "Saved" : "Save"}
+            {save.isSuccess && !changed() ? t().common.saved : t().common.save}
           </Button>
         </form>
         <Show when={save.error}>
-          <p class="text-sm text-destructive">{save.error?.message}</p>
+          <p class="text-sm text-destructive">{errorMessage(save.error)}</p>
         </Show>
         <Show when={props.site.aliases.length > 0}>
           <div class="grid gap-2 border-t pt-4">
-            <h3 class="text-sm font-medium">Old domains</h3>
+            <h3 class="text-sm font-medium">{t().settings.oldDomains}</h3>
             <p class="text-sm text-muted-foreground">
-              Events sent to these still count here. Remove one when no page uses it anymore, or to add it as its own site.
+              {t().settings.oldDomainsDescription}
             </p>
             <ul class="divide-y rounded-lg border">
               <For each={props.site.aliases}>
@@ -174,7 +174,7 @@ function DomainCard(props: { site: Site }) {
                       disabled={removeAlias.isPending}
                       onClick={() => removeAlias.mutate(alias)}
                     >
-                      Remove
+                      {t().common.remove}
                     </Button>
                   </li>
                 )}
@@ -198,8 +198,8 @@ function TimezoneCard(props: { siteId: string; timezone: string }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Reporting timezone</CardTitle>
-        <CardDescription>Days and hours in your reports start and end in this timezone.</CardDescription>
+        <CardTitle>{t().settings.timezoneTitle}</CardTitle>
+        <CardDescription>{t().settings.timezoneDescription}</CardDescription>
       </CardHeader>
       <CardContent>
         <form
@@ -209,7 +209,7 @@ function TimezoneCard(props: { siteId: string; timezone: string }) {
             save.mutate();
           }}
         >
-          <NativeSelect value={tz()} onChange={(e) => setTz(e.currentTarget.value)} class="sm:max-w-xs" aria-label="Timezone">
+          <NativeSelect value={tz()} onChange={(e) => setTz(e.currentTarget.value)} class="sm:max-w-xs" aria-label={t().settings.timezone}>
             <For each={timezones()}>{(z) => (
                 <option value={z} selected={z === tz()}>
                   {z.replaceAll("_", " ")}
@@ -217,7 +217,7 @@ function TimezoneCard(props: { siteId: string; timezone: string }) {
               )}</For>
           </NativeSelect>
           <Button type="submit" variant="outline" disabled={tz() === props.timezone || save.isPending}>
-            {save.isSuccess && tz() === props.timezone ? "Saved" : "Save"}
+            {save.isSuccess && tz() === props.timezone ? t().common.saved : t().common.save}
           </Button>
         </form>
       </CardContent>
@@ -240,19 +240,19 @@ function DangerCard(props: { siteId: string; domain: string }) {
   return (
     <Card class="ring-destructive/25">
       <CardHeader>
-        <CardTitle>Delete site</CardTitle>
-        <CardDescription>Removes the site and all of its stats. This can't be undone.</CardDescription>
+        <CardTitle>{t().settings.deleteTitle}</CardTitle>
+        <CardDescription>{t().settings.deleteDescription}</CardDescription>
       </CardHeader>
       <CardContent>
         <Button variant="destructive" onClick={() => setOpen(true)}>
-          Delete {props.domain}
+          {t().settings.deleteButton(props.domain)}
         </Button>
       </CardContent>
       <Dialog open={open()} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete {props.domain}?</DialogTitle>
-            <DialogDescription>All stats for this site will be deleted permanently.</DialogDescription>
+            <DialogTitle>{t().settings.deleteConfirmTitle(props.domain)}</DialogTitle>
+            <DialogDescription>{t().settings.deleteConfirmDescription}</DialogDescription>
           </DialogHeader>
           <form
             class="grid gap-5"
@@ -263,16 +263,16 @@ function DangerCard(props: { siteId: string; domain: string }) {
           >
             <div class="grid gap-2">
               <Label for="confirm-domain">
-                Type <span class="font-semibold">{props.domain}</span> to confirm
+                {t().settings.typeToConfirm(<span class="font-semibold">{props.domain}</span>)}
               </Label>
               <Input id="confirm-domain" autocomplete="off" value={confirm()} onInput={(e) => setConfirm(e.currentTarget.value)} />
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setOpen(false)}>
-                Cancel
+                {t().common.cancel}
               </Button>
               <Button type="submit" variant="destructive" disabled={confirm() !== props.domain || remove.isPending}>
-                Delete site
+                {t().settings.deleteSubmit}
               </Button>
             </DialogFooter>
           </form>

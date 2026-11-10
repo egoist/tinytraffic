@@ -6,6 +6,7 @@ import { api } from "~/lib/api";
 import { AddSiteDialog } from "./add-site-dialog";
 import { ChangePasswordDialog } from "./change-password-dialog";
 import { Logo, LogoMark } from "./logo";
+import { LanguageToggle } from "./language-toggle";
 import { ThemeToggle } from "./theme-toggle";
 import { Button } from "./ui/button";
 import {
@@ -16,6 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
+import { t } from "~/lib/i18n";
 import { ready } from "~/lib/query";
 
 export function AppHeader() {
@@ -38,7 +40,7 @@ export function AppHeader() {
   return (
     <header class="sticky top-0 z-40 border-b bg-background/80 backdrop-blur-md">
       <div class="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 sm:px-6">
-        <Link to="/" class="rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="All sites">
+        <Link to="/" class="rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={t().header.allSites}>
           <Show when={siteId()} fallback={<Logo />}>
             <LogoMark />
           </Show>
@@ -54,7 +56,7 @@ export function AppHeader() {
                   <ChevronsUpDown class="text-muted-foreground" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent class="w-60">
-                  <DropdownMenuLabel>Sites</DropdownMenuLabel>
+                  <DropdownMenuLabel>{t().header.sites}</DropdownMenuLabel>
                   <For each={ready(sites) ?? []}>
                     {(s) => (
                       <DropdownMenuItem
@@ -67,7 +69,7 @@ export function AppHeader() {
                   </For>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onSelect={() => setAdding(true)}>
-                    <Plus /> Add site
+                    <Plus /> {t().header.addSite}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -81,32 +83,33 @@ export function AppHeader() {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                aria-label="Site settings"
+                aria-label={t().header.siteSettings}
                 onClick={() => navigate({ to: "/sites/$siteId/settings", params: { siteId: id() } })}
               >
                 <Settings />
               </Button>
             )}
           </Show>
+          <LanguageToggle />
           <ThemeToggle />
           <DropdownMenu placement="bottom-end">
             <DropdownMenuTrigger
               as="button"
               class="ml-1 grid size-8 cursor-pointer place-items-center rounded-full bg-card text-xs font-semibold shadow-xs ring ring-line outline-none hover:bg-accent active:bg-recessed active:shadow-none focus-visible:ring-2 focus-visible:ring-ring data-[expanded]:bg-accent"
-              aria-label="Account"
+              aria-label={t().header.account}
             >
               <KeyRound class="size-3.5 text-muted-foreground" />
             </DropdownMenuTrigger>
             <DropdownMenuContent class="w-48">
               <DropdownMenuItem onSelect={() => navigate({ to: "/api-keys" })}>
-                <Code /> API keys
+                <Code /> {t().header.apiKeys}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => setChangingPassword(true)}>
-                <KeyRound /> Change password
+                <KeyRound /> {t().header.changePassword}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => logout.mutate()}>
-                <LogOut /> Sign out
+                <LogOut /> {t().header.signOut}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

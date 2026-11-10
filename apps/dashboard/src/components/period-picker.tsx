@@ -2,6 +2,7 @@ import { Calendar, ChevronDown } from "lucide-solid";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { periods, type Period } from "~/lib/dims";
 import { parseBucket } from "~/lib/format";
+import { intlLocale, t } from "~/lib/i18n";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog";
 import {
@@ -16,14 +17,14 @@ import { Input, Label } from "./ui/input";
 export type PeriodValue = { period: Period; from?: string; to?: string };
 
 function fmtDay(s: string) {
-  return parseBucket(s).toLocaleDateString("en", { month: "short", day: "numeric", year: "numeric" });
+  return parseBucket(s).toLocaleDateString(intlLocale(), { month: "short", day: "numeric", year: "numeric" });
 }
 
 export function periodLabel(v: PeriodValue) {
   if (v.period === "custom" && v.from && v.to) {
     return v.from === v.to ? fmtDay(v.from) : `${fmtDay(v.from)} – ${fmtDay(v.to)}`;
   }
-  return periods.find((p) => p.value === v.period)?.label ?? "Last 30 days";
+  return t().periods[v.period === "custom" ? "30d" : v.period];
 }
 
 export function PeriodPicker(props: { value: PeriodValue; onChange: (v: PeriodValue) => void }) {
@@ -67,14 +68,14 @@ export function PeriodPicker(props: { value: PeriodValue; onChange: (v: PeriodVa
                   shortcut={props.value.period === p.value ? undefined : p.shortcut}
                   onSelect={() => props.onChange({ period: p.value })}
                 >
-                  {p.label}
+                  {t().periods[p.value]}
                 </DropdownMenuItem>
               </>
             )}
           </For>
           <DropdownMenuSeparator />
           <DropdownMenuItem checked={props.value.period === "custom"} onSelect={() => setCustomOpen(true)}>
-            Custom range…
+            {t().periodPicker.custom}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -101,8 +102,8 @@ function CustomRangeDialog(props: { initial: PeriodValue; onClose: () => void; o
     <Dialog open onOpenChange={(o) => !o && props.onClose()}>
       <DialogContent class="max-w-sm">
         <DialogHeader>
-          <DialogTitle>Custom range</DialogTitle>
-          <DialogDescription>Both days are included.</DialogDescription>
+          <DialogTitle>{t().periodPicker.customTitle}</DialogTitle>
+          <DialogDescription>{t().periodPicker.customDescription}</DialogDescription>
         </DialogHeader>
         <form
           class="grid gap-5"
@@ -113,20 +114,20 @@ function CustomRangeDialog(props: { initial: PeriodValue; onClose: () => void; o
         >
           <div class="grid grid-cols-2 gap-3">
             <div class="grid gap-2">
-              <Label for="range-from">From</Label>
+              <Label for="range-from">{t().periodPicker.from}</Label>
               <Input id="range-from" type="date" max={today} value={from()} onInput={(e) => setFrom(e.currentTarget.value)} />
             </div>
             <div class="grid gap-2">
-              <Label for="range-to">To</Label>
+              <Label for="range-to">{t().periodPicker.to}</Label>
               <Input id="range-to" type="date" max={today} value={to()} onInput={(e) => setTo(e.currentTarget.value)} />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={props.onClose}>
-              Cancel
+              {t().common.cancel}
             </Button>
             <Button type="submit" disabled={!valid()}>
-              Apply
+              {t().periodPicker.apply}
             </Button>
           </DialogFooter>
         </form>

@@ -1,6 +1,7 @@
 import { createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Show, untrack } from "solid-js";
 import type { Point } from "~/lib/api";
 import { formatBucket } from "~/lib/format";
+import { t } from "~/lib/i18n";
 import { cn } from "~/lib/utils";
 
 export type ChartMetric = {
@@ -187,7 +188,7 @@ export function TrafficChart(props: {
       onPointerMove={onMove}
       onPointerLeave={() => setHover(null)}
     >
-      <svg width="100%" height={HEIGHT} role="img" aria-label={`${props.metric.label} over time`}>
+      <svg width="100%" height={HEIGHT} role="img" aria-label={t().chart.overTime(props.metric.label)}>
         <For each={geo().ticks}>
           {(t) => {
             // Ticks slide to their new height with the line; ones added
@@ -242,7 +243,7 @@ export function TrafficChart(props: {
 
       <Show when={geo().empty}>
         <div class="pointer-events-none absolute inset-0 flex items-center justify-center pb-6 text-sm text-muted-foreground">
-          No data in this period
+          {t().chart.noData}
         </div>
       </Show>
 
@@ -269,7 +270,7 @@ export function TrafficChart(props: {
       <table class="sr-only">
         <thead>
           <tr>
-            <th>Date</th>
+            <th>{t().chart.date}</th>
             <th>{props.metric.label}</th>
           </tr>
         </thead>

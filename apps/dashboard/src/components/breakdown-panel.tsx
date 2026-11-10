@@ -4,6 +4,7 @@ import { createMemo, createSignal, For, Match, Show, Switch, type JSX } from "so
 import { api, type BreakdownRow, type StatsParams } from "~/lib/api";
 import { valueLabel } from "~/lib/dims";
 import { flag, formatFull, formatNumber, formatPercent } from "~/lib/format";
+import { t } from "~/lib/i18n";
 import { cn } from "~/lib/utils";
 import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
@@ -65,8 +66,8 @@ function LinkLabel(props: { value: string }) {
     <Show
       when={slash() >= 0}
       fallback={
-        <span class="truncate text-muted-foreground" title="The browser only sent the domain">
-          {props.value} <span class="text-xs">· domain only</span>
+        <span class="truncate text-muted-foreground" title={t().breakdown.domainOnlyTitle}>
+          {props.value} <span class="text-xs">· {t().breakdown.domainOnly}</span>
         </span>
       }
     >
@@ -116,7 +117,7 @@ function Rows(props: {
                         type="button"
                         onClick={() => toggle(row.value)}
                         aria-expanded={open()}
-                        aria-label={`${open() ? "Hide" : "Show"} links from ${row.value}`}
+                        aria-label={t().breakdown.toggleLinks(open(), row.value)}
                         class="grid size-6 shrink-0 cursor-pointer place-items-center rounded text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         <ChevronRight class={cn("size-4 transition-transform", open() && "rotate-90")} />
@@ -128,7 +129,7 @@ function Rows(props: {
                   type="button"
                   onClick={() => props.onFilter(props.tab.dim, row.value)}
                   class="group relative flex h-8 min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-md text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  title={`Filter by ${valueLabel(props.tab.dim, row.value)}`}
+                  title={t().breakdown.filterBy(valueLabel(props.tab.dim, row.value))}
                 >
                   <span
                     class="absolute inset-y-0 left-0 rounded-md bg-bar transition-[width] duration-300 group-hover:brightness-95 dark:group-hover:brightness-125"
@@ -159,8 +160,8 @@ function Rows(props: {
                     target="_blank"
                     rel="noopener noreferrer"
                     class="grid size-6 shrink-0 place-items-center rounded text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                    aria-label={`Open ${row.value}`}
-                    title="Open link"
+                    aria-label={t().breakdown.open(row.value)}
+                    title={t().breakdown.openLink}
                   >
                     <ExternalLink class="size-3.5" />
                   </a>
@@ -178,6 +179,8 @@ function Rows(props: {
 }
 
 export function BreakdownPanel(props: {
+  /** Stable name, for remembering the selected tab. */
+  id: string;
   title: string;
   tabs: PanelTab[];
   site: string;
@@ -189,7 +192,7 @@ export function BreakdownPanel(props: {
   footer?: JSX.Element;
 }) {
   // Each card remembers its last selected tab in this browser.
-  const storageKey = `tt-tab:${props.title}`;
+  const storageKey = `tt-tab:${props.id}`;
   const saved = storage.get(storageKey);
   const [tabDim, setTabDimSignal] = createSignal(props.tabs.some((t) => t.dim === saved) ? saved! : props.tabs[0].dim);
   const setTabDim = (dim: string) => {
@@ -217,8 +220,8 @@ export function BreakdownPanel(props: {
       <div class="mb-1.5 flex items-center justify-between px-2.5 text-xs font-medium text-muted-foreground">
         <span>{tab().column}</span>
         <span class="flex gap-3 pr-1">
-          <span class="w-12 text-right">Visitors</span>
-          <span class="w-11 text-right">{tab().conversion ? "CR" : "Share"}</span>
+          <span class="w-12 text-right">{t().breakdown.visitors}</span>
+          <span class="w-11 text-right">{tab().conversion ? t().breakdown.conversion : t().breakdown.share}</span>
         </span>
       </div>
 
@@ -236,10 +239,10 @@ export function BreakdownPanel(props: {
             </div>
           </Match>
           <Match when={query.isError}>
-            <p class="py-12 text-center text-sm text-muted-foreground">Couldn't load this panel.</p>
+            <p class="py-12 text-center text-sm text-muted-foreground">{t().breakdown.loadError}</p>
           </Match>
           <Match when={ready(query)?.rows.length === 0}>
-            <div class="py-12 text-center text-sm text-muted-foreground">{props.empty ?? "No data yet"}</div>
+            <div class="py-12 text-center text-sm text-muted-foreground">{props.empty ?? t().breakdown.noData}</div>
           </Match>
           <Match when={ready(query)}>
             {(data) => <Rows tab={tab()} rows={data().rows} total={data().total_visitors} onFilter={props.onFilter} />}
@@ -250,7 +253,7 @@ export function BreakdownPanel(props: {
       <Show when={(ready(query)?.rows.length ?? 0) >= ROWS || ready(query)?.rows.some((r) => (r.links ?? 0) > 0)}>
         <div class="mt-2 flex justify-center">
           <Button variant="ghost" size="sm" class="text-muted-foreground" onClick={() => setOpen(true)}>
-            <Maximize2 class="!size-3.5" /> Details
+            <Maximize2 class="!size-3.5" /> {t().breakdown.details}
           </Button>
         </div>
       </Show>
@@ -305,7 +308,7 @@ function DetailsDialog(props: {
         </DialogHeader>
         <div class="relative">
           <Search class="absolute top-2.5 left-3 size-4 text-muted-foreground" />
-          <Input placeholder="Search" class="pl-9" value={search()} onInput={(e) => setSearch(e.currentTarget.value)} />
+          <Input placeholder={t().breakdown.search} class="pl-9" value={search()} onInput={(e) => setSearch(e.currentTarget.value)} />
         </div>
         <div class={cn("flex items-center justify-between px-2.5 text-xs font-medium text-muted-foreground", props.tab.dim === "referrer" && "pl-9")}>
           <span>{props.tab.column}</span>
@@ -313,8 +316,8 @@ function DetailsDialog(props: {
             <Show when={props.tab.countLabel}>
               <span class="w-16 text-right">{props.tab.countLabel}</span>
             </Show>
-            <span class="w-12 text-right">Visitors</span>
-            <span class="w-11 text-right">{props.tab.conversion ? "CR" : "Share"}</span>
+            <span class="w-12 text-right">{t().breakdown.visitors}</span>
+            <span class="w-11 text-right">{props.tab.conversion ? t().breakdown.conversion : t().breakdown.share}</span>
           </span>
         </div>
         <div class="-mx-1 max-h-[55vh] overflow-y-auto px-1">
@@ -343,7 +346,7 @@ function DetailsDialog(props: {
               }
             />
             <Show when={rows().length === 0}>
-              <p class="py-10 text-center text-sm text-muted-foreground">Nothing matches</p>
+              <p class="py-10 text-center text-sm text-muted-foreground">{t().breakdown.nothingMatches}</p>
             </Show>
           </Show>
         </div>
@@ -352,7 +355,6 @@ function DetailsDialog(props: {
   );
 }
 
-const linkTab: PanelTab = { dim: "referrer_url", label: "Links", column: "Link", countLabel: "Pageviews" };
 
 /** The individual links under one referrer domain. */
 function ReferrerLinks(props: {
@@ -366,13 +368,19 @@ function ReferrerLinks(props: {
     ...props.params,
     f: [...(props.params.f ?? []).filter((f) => !f.startsWith("referrer:")), `referrer:${props.referrer}`],
   });
+  const linkTab = (): PanelTab => ({
+    dim: "referrer_url",
+    label: t().breakdown.links,
+    column: t().breakdown.link,
+    countLabel: t().breakdown.pageviews,
+  });
   const query = useQuery(() => ({
     queryKey: ["breakdown", props.site, "referrer_url", params(), 100],
     queryFn: () => api.breakdown(props.site, "referrer_url", params(), 100),
   }));
   return (
     <Show when={ready(query)} fallback={<Skeleton class="h-8" />}>
-      {(data) => <Rows tab={linkTab} rows={data().rows} total={props.total} onFilter={props.onFilter} showCount />}
+      {(data) => <Rows tab={linkTab()} rows={data().rows} total={props.total} onFilter={props.onFilter} showCount />}
     </Show>
   );
 }

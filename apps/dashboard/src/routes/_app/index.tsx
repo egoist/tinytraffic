@@ -9,6 +9,7 @@ import { Card, CardContent, Surface } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
 import { api, type SiteWithStats } from "~/lib/api";
 import { formatFull, formatNumber } from "~/lib/format";
+import { t } from "~/lib/i18n";
 import { ready } from "~/lib/query";
 
 export const Route = createFileRoute("/_app/")({
@@ -23,11 +24,11 @@ function Sites() {
     <div>
       <div class="mb-6 flex items-end justify-between gap-4">
         <div>
-          <h1 class="text-2xl font-semibold tracking-tight">Sites</h1>
-          <p class="mt-1 text-sm text-muted-foreground">Unique visitors over the last 24 hours.</p>
+          <h1 class="text-2xl font-semibold tracking-tight">{t().sites.title}</h1>
+          <p class="mt-1 text-sm text-muted-foreground">{t().sites.subtitle}</p>
         </div>
         <Button onClick={() => setAdding(true)}>
-          <Plus /> Add site
+          <Plus /> {t().sites.add}
         </Button>
       </div>
 
@@ -42,12 +43,12 @@ function Sites() {
             <div class="grid size-12 place-items-center rounded-full bg-recessed shadow-[inset_0_1px_2px_0_rgb(0_0_0/0.06)] ring ring-border">
               <Plus class="size-5 text-muted-foreground" />
             </div>
-            <h2 class="mt-4 font-semibold">Add your first site</h2>
+            <h2 class="mt-4 font-semibold">{t().sites.emptyTitle}</h2>
             <p class="mt-1 max-w-sm text-sm text-muted-foreground">
-              One script tag, no cookies, no consent banner. Stats show up the moment someone visits.
+              {t().sites.emptyBody}
             </p>
             <Button class="mt-6" onClick={() => setAdding(true)}>
-              Add a site
+              {t().sites.addFirst}
             </Button>
           </Surface>
         </Match>
@@ -85,7 +86,7 @@ function SiteCard(props: { site: SiteWithStats }) {
             <div class="text-2xl font-semibold tracking-tight tabular" title={formatFull(props.site.visitors_24h)}>
               {formatNumber(props.site.visitors_24h)}
             </div>
-            <div class="text-xs text-muted-foreground">visitors</div>
+            <div class="text-xs text-muted-foreground">{t().sites.visitors}</div>
           </div>
           <Sparkline values={props.site.sparkline} class="h-10 w-32" />
         </CardContent>

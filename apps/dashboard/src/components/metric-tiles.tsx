@@ -2,24 +2,25 @@ import { ArrowDownRight, ArrowUpRight } from "lucide-solid";
 import { createEffect, createSignal, For, on, onCleanup, onMount, Show } from "solid-js";
 import type { Metrics } from "~/lib/api";
 import { change, formatDuration, formatFull, formatNumber, formatPercent } from "~/lib/format";
+import { t } from "~/lib/i18n";
 import { cn } from "~/lib/utils";
 import { Skeleton } from "./ui/skeleton";
 
 export type MetricKey = keyof Metrics;
 
+/** Labels come from `t().metrics[key]`. */
 export const metricDefs: {
   key: MetricKey;
-  label: string;
   format: (n: number) => string;
   /** Whether an increase is good news. */
   upIsGood: boolean;
 }[] = [
-  { key: "visitors", label: "Unique visitors", format: formatNumber, upIsGood: true },
-  { key: "visits", label: "Total visits", format: formatNumber, upIsGood: true },
-  { key: "pageviews", label: "Pageviews", format: formatNumber, upIsGood: true },
-  { key: "views_per_visit", label: "Views per visit", format: (n) => n.toFixed(2), upIsGood: true },
-  { key: "bounce_rate", label: "Bounce rate", format: (n) => formatPercent(n), upIsGood: false },
-  { key: "visit_duration", label: "Visit duration", format: formatDuration, upIsGood: true },
+  { key: "visitors", format: formatNumber, upIsGood: true },
+  { key: "visits", format: formatNumber, upIsGood: true },
+  { key: "pageviews", format: formatNumber, upIsGood: true },
+  { key: "views_per_visit", format: (n) => n.toFixed(2), upIsGood: true },
+  { key: "bounce_rate", format: (n) => formatPercent(n), upIsGood: false },
+  { key: "visit_duration", format: formatDuration, upIsGood: true },
 ];
 
 export function MetricTiles(props: {
@@ -83,7 +84,7 @@ export function MetricTiles(props: {
                   class={cn("size-1.5 rounded-full bg-chart-1 transition-opacity", selected() ? "opacity-100" : "opacity-0")}
                   aria-hidden="true"
                 />
-                {m.label}
+                {t().metrics[m.key]}
               </div>
               <Show when={value() !== undefined} fallback={<Skeleton class="mt-2 h-7 w-20" />}>
                 <div class="mt-1.5 flex items-baseline gap-2">
@@ -117,7 +118,7 @@ function Delta(props: { value: number | null; upIsGood: boolean }) {
               "inline-flex items-center text-xs font-medium tabular",
               rounded() === 0 ? "text-muted-foreground" : good() ? "text-positive" : "text-negative",
             )}
-            title="Compared to the previous period"
+            title={t().metrics.compared}
           >
             <Show when={rounded() !== 0}>
               {v() > 0 ? <ArrowUpRight class="size-3.5" /> : <ArrowDownRight class="size-3.5" />}

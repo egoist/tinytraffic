@@ -13,6 +13,7 @@ import { Card, CardContent, Surface } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
 import { api, type StatsParams } from "~/lib/api";
 import { periodValues, type Period } from "~/lib/dims";
+import { t } from "~/lib/i18n";
 import { ready } from "~/lib/query";
 
 type DashboardSearch = {
@@ -102,9 +103,9 @@ function Dashboard() {
             to="/sites/$siteId/live"
             params={{ siteId: siteId() }}
             class={buttonVariants({ variant: "outline", size: "sm" })}
-            title="Live view (L)"
+            title={t().dashboard.liveViewTitle}
           >
-            <Earth class="text-muted-foreground" /> Live view
+            <Earth class="text-muted-foreground" /> {t().dashboard.liveView}
           </Link>
         </div>
         <PeriodPicker value={{ period: stats().period as Period, from: stats().from, to: stats().to }} onChange={setPeriod} />
@@ -118,9 +119,9 @@ function Dashboard() {
 
       <Show when={aggregate.error?.message === "site not found"}>
         <Surface class="p-10 text-center">
-          <p class="font-medium">This site doesn't exist.</p>
+          <p class="font-medium">{t().common.siteNotFound}</p>
           <Link to="/" class="mt-2 inline-block text-sm text-muted-foreground underline underline-offset-4">
-            Back to all sites
+            {t().common.backToSites}
           </Link>
         </Surface>
       </Show>
@@ -141,7 +142,7 @@ function Dashboard() {
                 points={data().points}
                 interval={data().query.interval}
                 timezone={data().query.timezone}
-                metric={{ label: metricDef().label, value: (p) => p[metric()], format: metricDef().format }}
+                metric={{ label: t().metrics[metric()], value: (p) => p[metric()], format: metricDef().format }}
               />
             )}
           </Show>
@@ -150,42 +151,41 @@ function Dashboard() {
 
       <div class="grid gap-4 md:grid-cols-2">
         <BreakdownPanel
-          title="Sources"
+          id="Sources"
+          title={t().dashboard.sources}
           site={siteId()}
           params={stats()}
           onFilter={addFilter}
           tabs={[
-            { dim: "source", label: "Sources", column: "Source", countLabel: "Pageviews" },
-            { dim: "referrer", label: "Referrers", column: "Referrer", countLabel: "Pageviews" },
-            { dim: "utm_campaign", label: "Campaigns", column: "Campaign", countLabel: "Pageviews" },
+            { dim: "source", label: t().dashboard.sources, column: t().dashboard.source, countLabel: t().dashboard.pageviews },
+            { dim: "referrer", label: t().dashboard.referrers, column: t().dashboard.referrer, countLabel: t().dashboard.pageviews },
+            { dim: "utm_campaign", label: t().dashboard.campaigns, column: t().dashboard.campaign, countLabel: t().dashboard.pageviews },
           ]}
         />
         <BreakdownPanel
-          title="Pages"
+          id="Pages"
+          title={t().dashboard.pages}
           site={siteId()}
           params={stats()}
           onFilter={addFilter}
           tabs={[
-            { dim: "page", label: "Top", column: "Page", countLabel: "Pageviews" },
-            { dim: "entry_page", label: "Entry", column: "Entry page", countLabel: "Visits" },
-            { dim: "exit_page", label: "Exit", column: "Exit page", countLabel: "Visits" },
+            { dim: "page", label: t().dashboard.top, column: t().dashboard.page, countLabel: t().dashboard.pageviews },
+            { dim: "entry_page", label: t().dashboard.entry, column: t().dashboard.entryPage, countLabel: t().dashboard.visits },
+            { dim: "exit_page", label: t().dashboard.exit, column: t().dashboard.exitPage, countLabel: t().dashboard.visits },
           ]}
         />
         <BreakdownPanel
-          title="Locations"
+          id="Locations"
+          title={t().dashboard.locations}
           site={siteId()}
           params={stats()}
           onFilter={addFilter}
           tabs={[
-            { dim: "country", label: "Countries", column: "Country", countLabel: "Pageviews" },
-            { dim: "region", label: "Regions", column: "Region", countLabel: "Pageviews" },
-            { dim: "city", label: "Cities", column: "City", countLabel: "Pageviews" },
+            { dim: "country", label: t().dashboard.countries, column: t().dashboard.country, countLabel: t().dashboard.pageviews },
+            { dim: "region", label: t().dashboard.regions, column: t().dashboard.region, countLabel: t().dashboard.pageviews },
+            { dim: "city", label: t().dashboard.cities, column: t().dashboard.city, countLabel: t().dashboard.pageviews },
           ]}
-          empty={
-            ready(info)?.geoip.enabled === false
-              ? "Locations need a GeoIP database. See the README."
-              : undefined
-          }
+          empty={ready(info)?.geoip.enabled === false ? t().dashboard.geoipNeeded : undefined}
           footer={
             <Show when={ready(info)?.geoip.attribution.url}>
               <a
@@ -200,28 +200,38 @@ function Dashboard() {
           }
         />
         <BreakdownPanel
-          title="Devices"
+          id="Devices"
+          title={t().dashboard.devices}
           site={siteId()}
           params={stats()}
           onFilter={addFilter}
           tabs={[
-            { dim: "browser", label: "Browsers", column: "Browser", countLabel: "Pageviews" },
-            { dim: "os", label: "OS", column: "Operating system", countLabel: "Pageviews" },
-            { dim: "device", label: "Size", column: "Screen size", countLabel: "Pageviews" },
+            { dim: "browser", label: t().dashboard.browsers, column: t().dashboard.browser, countLabel: t().dashboard.pageviews },
+            { dim: "os", label: t().dashboard.os, column: t().dashboard.operatingSystem, countLabel: t().dashboard.pageviews },
+            { dim: "device", label: t().dashboard.size, column: t().dashboard.screenSize, countLabel: t().dashboard.pageviews },
           ]}
         />
         <BreakdownPanel
-          title="Goals"
+          id="Goals"
+          title={t().dashboard.goals}
           class="md:col-span-2"
           site={siteId()}
           params={stats()}
           onFilter={addFilter}
-          tabs={[{ dim: "event", label: "Events", column: "Custom event", countLabel: "Events", conversion: true }]}
+          tabs={[
+            {
+              dim: "event",
+              label: t().dashboard.events,
+              column: t().dashboard.customEvent,
+              countLabel: t().dashboard.events,
+              conversion: true,
+            },
+          ]}
           empty={
             <>
-              No custom events yet.{" "}
+              {t().dashboard.noEvents}{" "}
               <Link to="/sites/$siteId/settings" params={{ siteId: siteId() }} class="underline underline-offset-4 hover:text-foreground">
-                How to send one
+                {t().dashboard.howToSend}
               </Link>
             </>
           }
