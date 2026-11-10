@@ -18,7 +18,7 @@ export const en = {
 
   units: { s: "s", m: "m", h: "h", sep: " ", now: "now", justNow: "just now" },
 
-  language: { label: "Language", system: "Auto" },
+  language: { label: "Language", system: "Auto detect" },
   theme: { label: "Theme", light: "Light", dark: "Dark", system: "System" },
 
   header: {
