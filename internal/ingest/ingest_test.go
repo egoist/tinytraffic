@@ -131,3 +131,32 @@ func TestTrustRequestForwardedIP(t *testing.T) {
 		st.Close()
 	}
 }
+
+// After a rename, snippets still sending the old domain keep recording, and
+// an event for both domains is recorded once.
+func TestRenamedSite(t *testing.T) {
+	st, err := store.Open("", store.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	site, _ := st.CreateSite("old.com", "UTC")
+	if _, err := st.UpdateSite(site.ID, store.SiteUpdate{Domain: "new.com"}); err != nil {
+		t.Fatal(err)
+	}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	w := store.NewWriter(st.DB, log)
+	h := NewHandler(Handler{Store: st, Writer: w, Salts: NewSalts(st.DB), Log: log})
+	for _, d := range []string{"old.com", "new.com", "old.com,new.com"} {
+		req := httptest.NewRequest(http.MethodPost, "/api/event", strings.NewReader(`{"n":"pageview","u":"https://new.com/","d":"`+d+`"}`))
+		req.Header.Set("User-Agent", chromeUA)
+		req.RemoteAddr = "203.0.113.7:1234"
+		h.ServeHTTP(httptest.NewRecorder(), req)
+	}
+	w.Close()
+	var n int
+	st.DB.QueryRow(`SELECT count(*) FROM events WHERE site_id = ?`, site.ID).Scan(&n)
+	if n != 3 {
+		t.Errorf("%d events, want 3", n)
+	}
+}

@@ -7,11 +7,11 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { Input, Label, NativeSelect } from "~/components/ui/input";
-import { api } from "~/lib/api";
+import { api, type Site } from "~/lib/api";
 import { timezones } from "~/lib/timezones";
 import { ready } from "~/lib/query";
 
-export const Route = createFileRoute("/_app/$domain/settings")({
+export const Route = createFileRoute("/_app/sites/$siteId/settings")({
   validateSearch: (s: Record<string, unknown>): { welcome?: boolean } => ({ welcome: s.welcome === true || undefined }),
   component: Settings,
 });
@@ -19,16 +19,16 @@ export const Route = createFileRoute("/_app/$domain/settings")({
 function Settings() {
   const params = Route.useParams();
   const search = Route.useSearch();
-  const domain = () => params().domain;
+  const siteId = () => params().siteId;
   const sites = useQuery(() => ({ queryKey: ["sites"], queryFn: api.sites }));
-  const site = () => ready(sites)?.find((s) => s.domain === domain());
+  const site = () => ready(sites)?.find((s) => String(s.id) === siteId());
 
   return (
     <div class="mx-auto flex max-w-3xl flex-col gap-6">
       <div>
         <Link
-          to="/$domain"
-          params={{ domain: domain() }}
+          to="/sites/$siteId"
+          params={{ siteId: siteId() }}
           class="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft class="size-4" /> Dashboard
@@ -36,26 +36,40 @@ function Settings() {
         <h1 class="mt-3 text-2xl font-semibold tracking-tight">Settings</h1>
       </div>
 
-      <Show when={search().welcome}>
-        <Card class="border-chart-1/30 bg-chart-wash p-5">
-          <p class="font-medium">{domain()} is ready.</p>
-          <p class="mt-1 text-sm text-muted-foreground">Paste the snippet below into your site's &lt;head&gt; and you're done.</p>
+      <Show when={ready(sites) && !site()}>
+        <Card class="p-10 text-center">
+          <p class="font-medium">This site doesn't exist.</p>
+          <Link to="/" class="mt-2 inline-block text-sm text-muted-foreground underline underline-offset-4">
+            Back to all sites
+          </Link>
         </Card>
       </Show>
 
-      <TrackingCard domain={domain()} hasData={(site()?.visitors_24h ?? 0) > 0} />
+      <Show when={site()}>
+        {(s) => (
+          <>
+            <Show when={search().welcome}>
+              <Card class="border-chart-1/30 bg-chart-wash p-5">
+                <p class="font-medium">{s().domain} is ready.</p>
+                <p class="mt-1 text-sm text-muted-foreground">Paste the snippet below into your site's &lt;head&gt; and you're done.</p>
+              </Card>
+            </Show>
 
-      <Show when={site()}>{(s) => <TimezoneCard domain={domain()} timezone={s().timezone} />}</Show>
-
-      <DangerCard domain={domain()} />
+            <TrackingCard siteId={siteId()} domain={s().domain} hasData={s().visitors_24h > 0} />
+            <DomainCard site={s()} />
+            <TimezoneCard siteId={siteId()} timezone={s().timezone} />
+            <DangerCard siteId={siteId()} domain={s().domain} />
+          </>
+        )}
+      </Show>
     </div>
   );
 }
 
-function TrackingCard(props: { domain: string; hasData: boolean }) {
+function TrackingCard(props: { siteId: string; domain: string; hasData: boolean }) {
   const live = useQuery(() => ({
-    queryKey: ["realtime", props.domain],
-    queryFn: () => api.realtime(props.domain),
+    queryKey: ["realtime", props.siteId],
+    queryFn: () => api.realtime(props.siteId),
     refetchInterval: 5_000,
   }));
   return (
@@ -95,12 +109,90 @@ function TrackingCard(props: { domain: string; hasData: boolean }) {
   );
 }
 
-function TimezoneCard(props: { domain: string; timezone: string }) {
+function DomainCard(props: { site: Site }) {
+  const qc = useQueryClient();
+  const [domain, setDomain] = createSignal(props.site.domain);
+  createEffect(() => setDomain(props.site.domain));
+  const save = useMutation(() => ({
+    mutationFn: () => api.updateSite(props.site.id, { domain: domain() }),
+    onSuccess: (site) => {
+      setDomain(site.domain);
+      return qc.invalidateQueries({ queryKey: ["sites"] });
+    },
+  }));
+  const removeAlias = useMutation(() => ({
+    mutationFn: (alias: string) => api.removeAlias(props.site.id, alias),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["sites"] }),
+  }));
+  const changed = () => domain().trim() !== "" && domain().trim() !== props.site.domain;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Domain</CardTitle>
+        <CardDescription>
+          Moved your site? Change its domain here. Your stats stay, and events sent to the old domain still count, so
+          existing snippets keep working until you update them.
+        </CardDescription>
+      </CardHeader>
+      <CardContent class="grid gap-4">
+        <form
+          class="flex flex-col gap-3 sm:flex-row"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (changed()) save.mutate();
+          }}
+        >
+          <Input
+            aria-label="Domain"
+            autocomplete="off"
+            class="sm:max-w-xs"
+            value={domain()}
+            onInput={(e) => setDomain(e.currentTarget.value)}
+            aria-invalid={save.isError}
+          />
+          <Button type="submit" variant="outline" disabled={!changed() || save.isPending}>
+            {save.isSuccess && !changed() ? "Saved" : "Save"}
+          </Button>
+        </form>
+        <Show when={save.error}>
+          <p class="text-sm text-destructive">{save.error?.message}</p>
+        </Show>
+        <Show when={props.site.aliases.length > 0}>
+          <div class="grid gap-2 border-t pt-4">
+            <h3 class="text-sm font-medium">Old domains</h3>
+            <p class="text-sm text-muted-foreground">
+              Events sent to these still count here. Remove one when no page uses it anymore, or to add it as its own site.
+            </p>
+            <ul class="divide-y rounded-lg border">
+              <For each={props.site.aliases}>
+                {(alias) => (
+                  <li class="flex items-center justify-between gap-4 px-4 py-2">
+                    <span class="truncate text-sm">{alias}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={removeAlias.isPending}
+                      onClick={() => removeAlias.mutate(alias)}
+                    >
+                      Remove
+                    </Button>
+                  </li>
+                )}
+              </For>
+            </ul>
+          </div>
+        </Show>
+      </CardContent>
+    </Card>
+  );
+}
+
+function TimezoneCard(props: { siteId: string; timezone: string }) {
   const qc = useQueryClient();
   const [tz, setTz] = createSignal(props.timezone);
   createEffect(() => setTz(props.timezone));
   const save = useMutation(() => ({
-    mutationFn: () => api.updateSite(props.domain, tz()),
+    mutationFn: () => api.updateSite(props.siteId, { timezone: tz() }),
     onSuccess: () => qc.invalidateQueries(),
   }));
   return (
@@ -133,13 +225,13 @@ function TimezoneCard(props: { domain: string; timezone: string }) {
   );
 }
 
-function DangerCard(props: { domain: string }) {
+function DangerCard(props: { siteId: string; domain: string }) {
   const [open, setOpen] = createSignal(false);
   const [confirm, setConfirm] = createSignal("");
   const qc = useQueryClient();
   const navigate = useNavigate();
   const remove = useMutation(() => ({
-    mutationFn: () => api.deleteSite(props.domain),
+    mutationFn: () => api.deleteSite(props.siteId),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["sites"] });
       navigate({ to: "/" });

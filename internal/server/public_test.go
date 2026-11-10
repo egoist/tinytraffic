@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -166,17 +167,42 @@ func TestWriteScope(t *testing.T) {
 	if rec := callJSON(h, "PATCH", "/api/v1/sites/new.com", writeKey, `{"timezone":"Asia/Tokyo"}`); rec.Code != 200 || !strings.Contains(rec.Body.String(), "Asia/Tokyo") {
 		t.Errorf("update: %d %s", rec.Code, rec.Body)
 	}
+	// Changing the domain keeps the old one working, and sites can be
+	// addressed by ID.
+	rec := callJSON(h, "PATCH", "/api/v1/sites/new.com", writeKey, `{"domain":"renamed.com"}`)
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"domain":"renamed.com","timezone":"Asia/Tokyo","aliases":["new.com"]`) {
+		t.Errorf("rename: %d %s", rec.Code, rec.Body)
+	}
+	site, _ := st.SiteByDomain("renamed.com")
+	for _, ref := range []string{"renamed.com", "new.com", strconv.Itoa(int(site.ID))} {
+		if rec := call(h, "GET", "/api/v1/sites/"+ref+"/realtime", writeKey); rec.Code != 200 {
+			t.Errorf("realtime via %s: %d", ref, rec.Code)
+		}
+	}
+	if rec := callJSON(h, "PATCH", "/api/v1/sites/renamed.com", writeKey, `{"domain":"not a domain"}`); rec.Code != 400 {
+		t.Errorf("invalid domain: %d %s", rec.Code, rec.Body)
+	}
+	if rec := callJSON(h, "POST", "/api/v1/sites", writeKey, `{"domain":"new.com"}`); rec.Code != 409 {
+		t.Errorf("creating a site on an alias: %d %s", rec.Code, rec.Body)
+	}
+	if rec := call(h, "DELETE", "/api/v1/sites/renamed.com/aliases/new.com", writeKey); rec.Code != 200 || !strings.Contains(rec.Body.String(), `"aliases":[]`) {
+		t.Errorf("remove alias: %d %s", rec.Code, rec.Body)
+	}
+	if rec := call(h, "DELETE", "/api/v1/sites/renamed.com/aliases/new.com", writeKey); rec.Code != 404 {
+		t.Errorf("remove missing alias: %d", rec.Code)
+	}
+
 	// Write keys can read too.
-	if rec := call(h, "GET", "/api/v1/sites/new.com/aggregate?period=7d", writeKey); rec.Code != 200 {
+	if rec := call(h, "GET", "/api/v1/sites/renamed.com/aggregate?period=7d", writeKey); rec.Code != 200 {
 		t.Errorf("write key reading: %d", rec.Code)
 	}
-	if rec := call(h, "DELETE", "/api/v1/sites/new.com", readKey); rec.Code != 403 {
+	if rec := call(h, "DELETE", "/api/v1/sites/renamed.com", readKey); rec.Code != 403 {
 		t.Errorf("read key deleting: %d", rec.Code)
 	}
-	if rec := call(h, "DELETE", "/api/v1/sites/new.com", writeKey); rec.Code != 200 {
+	if rec := call(h, "DELETE", "/api/v1/sites/renamed.com", writeKey); rec.Code != 200 {
 		t.Errorf("delete: %d %s", rec.Code, rec.Body)
 	}
-	if _, ok := st.SiteByDomain("new.com"); ok {
+	if _, ok := st.SiteByDomain("renamed.com"); ok {
 		t.Error("site still exists after delete")
 	}
 

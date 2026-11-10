@@ -69,8 +69,8 @@ function SiteCard(props: { site: SiteWithStats }) {
   const initial = () => props.site.domain[0]?.toUpperCase() ?? "?";
   return (
     <Link
-      to="/$domain"
-      params={{ domain: props.site.domain }}
+      to="/sites/$siteId"
+      params={{ siteId: String(props.site.id) }}
       class="group rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
     >
       <Card class="flex h-full flex-col gap-5 p-5 transition-[border-color,box-shadow] group-hover:border-foreground/15 group-hover:shadow-sm">

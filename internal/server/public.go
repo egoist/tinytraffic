@@ -33,12 +33,13 @@ func (s *Server) publicRoutes(mux *http.ServeMux) {
 	read, write := store.ScopeRead, store.ScopeWrite
 	mux.HandleFunc("GET /api/v1/sites", s.public(read, s.listSites))
 	mux.HandleFunc("POST /api/v1/sites", s.public(write, s.createSite))
-	mux.HandleFunc("PATCH /api/v1/sites/{domain}", s.public(write, s.updateSite))
-	mux.HandleFunc("DELETE /api/v1/sites/{domain}", s.public(write, s.deleteSite))
-	mux.HandleFunc("GET /api/v1/sites/{domain}/aggregate", s.public(read, s.aggregate))
-	mux.HandleFunc("GET /api/v1/sites/{domain}/timeseries", s.public(read, s.timeseries))
-	mux.HandleFunc("GET /api/v1/sites/{domain}/breakdown/{dim}", s.public(read, s.breakdown))
-	mux.HandleFunc("GET /api/v1/sites/{domain}/realtime", s.public(read, s.realtime))
+	mux.HandleFunc("PATCH /api/v1/sites/{site}", s.public(write, s.updateSite))
+	mux.HandleFunc("DELETE /api/v1/sites/{site}", s.public(write, s.deleteSite))
+	mux.HandleFunc("DELETE /api/v1/sites/{site}/aliases/{alias}", s.public(write, s.removeAlias))
+	mux.HandleFunc("GET /api/v1/sites/{site}/aggregate", s.public(read, s.aggregate))
+	mux.HandleFunc("GET /api/v1/sites/{site}/timeseries", s.public(read, s.timeseries))
+	mux.HandleFunc("GET /api/v1/sites/{site}/breakdown/{dim}", s.public(read, s.breakdown))
+	mux.HandleFunc("GET /api/v1/sites/{site}/realtime", s.public(read, s.realtime))
 
 	// Key management, from the dashboard.
 	mux.HandleFunc("GET /api/keys", s.private(s.listKeys))

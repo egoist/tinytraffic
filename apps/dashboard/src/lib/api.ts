@@ -24,6 +24,8 @@ export type Site = {
   id: number;
   domain: string;
   timezone: string;
+  /** Previous domains, still accepted from the tracker. */
+  aliases: string[];
   created_at: string;
 };
 
@@ -88,7 +90,8 @@ function qs(p: StatsParams, extra?: Record<string, string>) {
   return s.toString();
 }
 
-const site = (domain: string) => `/api/sites/${encodeURIComponent(domain)}`;
+/** A site's API path. `ref` is its ID (or a domain). */
+const site = (ref: string | number) => `/api/sites/${encodeURIComponent(ref)}`;
 
 export const api = {
   auth: () => request<{ needs_setup: boolean; authenticated: boolean }>("/api/auth"),
@@ -101,15 +104,17 @@ export const api = {
   sites: () => request<SiteWithStats[]>("/api/sites"),
   createSite: (domain: string, timezone: string) =>
     request<Site>("/api/sites", { method: "POST", json: { domain, timezone } }),
-  updateSite: (domain: string, timezone: string) =>
-    request<Site>(site(domain), { method: "PATCH", json: { timezone } }),
-  deleteSite: (domain: string) => request(site(domain), { method: "DELETE" }),
+  updateSite: (ref: string | number, patch: { domain?: string; timezone?: string }) =>
+    request<Site>(site(ref), { method: "PATCH", json: patch }),
+  removeAlias: (ref: string | number, alias: string) =>
+    request<Site>(`${site(ref)}/aliases/${encodeURIComponent(alias)}`, { method: "DELETE" }),
+  deleteSite: (ref: string | number) => request(site(ref), { method: "DELETE" }),
 
-  aggregate: (domain: string, p: StatsParams) => request<Aggregate>(`${site(domain)}/aggregate?${qs(p)}`),
-  timeseries: (domain: string, p: StatsParams) => request<Timeseries>(`${site(domain)}/timeseries?${qs(p)}`),
-  breakdown: (domain: string, dim: string, p: StatsParams, limit = 10) =>
-    request<Breakdown>(`${site(domain)}/breakdown/${dim}?${qs(p, { limit: String(limit) })}`),
-  realtime: (domain: string) => request<{ visitors: number }>(`${site(domain)}/realtime`),
+  aggregate: (ref: string, p: StatsParams) => request<Aggregate>(`${site(ref)}/aggregate?${qs(p)}`),
+  timeseries: (ref: string, p: StatsParams) => request<Timeseries>(`${site(ref)}/timeseries?${qs(p)}`),
+  breakdown: (ref: string, dim: string, p: StatsParams, limit = 10) =>
+    request<Breakdown>(`${site(ref)}/breakdown/${dim}?${qs(p, { limit: String(limit) })}`),
+  realtime: (ref: string) => request<{ visitors: number }>(`${site(ref)}/realtime`),
   info: () => request<ServerInfo>("/api/info"),
 
   keys: () => request<APIKey[]>("/api/keys"),

@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"strings"
 	"sync"
 	"time"
 
@@ -17,9 +16,12 @@ import (
 )
 
 type Site struct {
-	ID        int32     `json:"id"`
-	Domain    string    `json:"domain"`
-	Timezone  string    `json:"timezone"`
+	ID       int32  `json:"id"`
+	Domain   string `json:"domain"`
+	Timezone string `json:"timezone"`
+	// Aliases are the site's previous domains. Events sent to them still
+	// count, so a snippet that wasn't updated after a rename keeps working.
+	Aliases   []string  `json:"aliases"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -29,8 +31,12 @@ var ErrExists = errors.New("already exists")
 type Store struct {
 	DB *sql.DB
 
-	mu    sync.RWMutex
-	sites map[string]Site // by domain
+	mu       sync.RWMutex
+	sites    map[int32]Site
+	byDomain map[string]int32 // domains and aliases
+	// siteWrite serializes site changes, since a domain must be unique across
+	// both sites and aliases.
+	siteWrite sync.Mutex
 
 	keysMu sync.RWMutex
 	keys   map[string]*APIKey // by hash
@@ -73,7 +79,7 @@ func Open(path string, opts Options) (*Store, error) {
 		return nil, fmt.Errorf("open duckdb: %w", err)
 	}
 	db := sql.OpenDB(connector)
-	s := &Store{DB: db, sites: map[string]Site{}, keys: map[string]*APIKey{}}
+	s := &Store{DB: db, sites: map[int32]Site{}, byDomain: map[string]int32{}, keys: map[string]*APIKey{}}
 	if err := s.migrate(); err != nil {
 		db.Close()
 		return nil, err
@@ -152,6 +158,13 @@ var migrations = [][]string{
 			last_used_at TIMESTAMPTZ
 		)`,
 	},
+	{
+		// Previous domains of renamed sites.
+		`CREATE TABLE site_aliases (
+			domain  VARCHAR PRIMARY KEY,
+			site_id INTEGER NOT NULL
+		)`,
+	},
 }
 
 func (s *Store) migrate() error {
@@ -198,117 +211,4 @@ func (s *Store) Setting(key string) (string, error) {
 func (s *Store) SetSetting(key, value string) error {
 	_, err := s.DB.Exec(`INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)`, key, value)
 	return err
-}
-
-// --- sites ---
-
-func NormalizeDomain(d string) string {
-	d = strings.ToLower(strings.TrimSpace(d))
-	d = strings.TrimPrefix(d, "https://")
-	d = strings.TrimPrefix(d, "http://")
-	if i := strings.IndexAny(d, "/?#"); i >= 0 {
-		d = d[:i]
-	}
-	return strings.TrimPrefix(d, "www.")
-}
-
-func (s *Store) loadSites() error {
-	rows, err := s.DB.Query(`SELECT id, domain, timezone, created_at FROM sites`)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	sites := map[string]Site{}
-	for rows.Next() {
-		var site Site
-		if err := rows.Scan(&site.ID, &site.Domain, &site.Timezone, &site.CreatedAt); err != nil {
-			return err
-		}
-		sites[site.Domain] = site
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	s.mu.Lock()
-	s.sites = sites
-	s.mu.Unlock()
-	return nil
-}
-
-// SiteByDomain is served from memory; it is on the hot ingest path.
-func (s *Store) SiteByDomain(domain string) (Site, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	site, ok := s.sites[NormalizeDomain(domain)]
-	return site, ok
-}
-
-func (s *Store) Sites() []Site {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	out := make([]Site, 0, len(s.sites))
-	for _, site := range s.sites {
-		out = append(out, site)
-	}
-	return out
-}
-
-func (s *Store) CreateSite(domain, timezone string) (Site, error) {
-	domain = NormalizeDomain(domain)
-	if _, ok := s.SiteByDomain(domain); ok {
-		return Site{}, ErrExists
-	}
-	site := Site{Domain: domain, Timezone: timezone}
-	err := s.DB.QueryRow(
-		`INSERT INTO sites (domain, timezone) VALUES (?, ?) RETURNING id, created_at`,
-		domain, timezone,
-	).Scan(&site.ID, &site.CreatedAt)
-	if err != nil {
-		return Site{}, err
-	}
-	s.mu.Lock()
-	s.sites[domain] = site
-	s.mu.Unlock()
-	return site, nil
-}
-
-func (s *Store) UpdateSiteTimezone(domain, timezone string) (Site, error) {
-	site, ok := s.SiteByDomain(domain)
-	if !ok {
-		return Site{}, ErrNotFound
-	}
-	if _, err := s.DB.Exec(`UPDATE sites SET timezone = ? WHERE id = ?`, timezone, site.ID); err != nil {
-		return Site{}, err
-	}
-	site.Timezone = timezone
-	s.mu.Lock()
-	s.sites[site.Domain] = site
-	s.mu.Unlock()
-	return site, nil
-}
-
-func (s *Store) DeleteSite(domain string) error {
-	site, ok := s.SiteByDomain(domain)
-	if !ok {
-		return ErrNotFound
-	}
-	tx, err := s.DB.Begin()
-	if err != nil {
-		return err
-	}
-	if _, err := tx.Exec(`DELETE FROM events WHERE site_id = ?`, site.ID); err != nil {
-		tx.Rollback()
-		return err
-	}
-	if _, err := tx.Exec(`DELETE FROM sites WHERE id = ?`, site.ID); err != nil {
-		tx.Rollback()
-		return err
-	}
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	s.mu.Lock()
-	delete(s.sites, site.Domain)
-	s.mu.Unlock()
-	return nil
 }

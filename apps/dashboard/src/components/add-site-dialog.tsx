@@ -18,7 +18,7 @@ export function AddSiteDialog(props: { open: boolean; onOpenChange: (v: boolean)
       await qc.invalidateQueries({ queryKey: ["sites"] });
       props.onOpenChange(false);
       setDomain("");
-      navigate({ to: "/$domain/settings", params: { domain: site.domain }, search: { welcome: true } });
+      navigate({ to: "/sites/$siteId/settings", params: { siteId: String(site.id) }, search: { welcome: true } });
     },
   }));
 

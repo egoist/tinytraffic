@@ -71,6 +71,9 @@ Every stats response includes a `query` object describing the resolved range:
 
 ## Endpoints
 
+`{site}` in a path is the site's `id` or its domain. Prefer the ID in
+scripts: it never changes, while a domain can.
+
 ### List sites
 
 `GET /api/v1/sites`
@@ -81,6 +84,7 @@ Every stats response includes a `query` object describing the resolved range:
     "id": 1,
     "domain": "example.com",
     "timezone": "Asia/Singapore",
+    "aliases": [],
     "created_at": "2026-11-10T10:20:57.79529Z",
     "visitors_24h": 1478,
     "sparkline": [88, 92, 95, "… 24 hourly values, oldest first"]
@@ -94,7 +98,7 @@ Write access needed. Bodies are JSON (`Content-Type: application/json`).
 
 `POST /api/v1/sites` adds a site. The domain is normalized (no scheme, no
 `www.`); `timezone` is an IANA name and defaults to `UTC`. Returns `201`, or
-`409` if the site exists.
+`409` if a site already uses the domain (as its domain or an old one).
 
 ```sh
 curl -X POST https://stats.example.com/api/v1/sites \
@@ -103,18 +107,24 @@ curl -X POST https://stats.example.com/api/v1/sites \
 ```
 
 ```json
-{ "id": 1, "domain": "example.com", "timezone": "Europe/Berlin", "created_at": "2026-11-10T10:27:15.652313Z" }
+{ "id": 1, "domain": "example.com", "timezone": "Europe/Berlin", "aliases": [], "created_at": "2026-11-10T10:27:15.652313Z" }
 ```
 
-`PATCH /api/v1/sites/{domain}` changes the reporting timezone:
-`{"timezone": "Asia/Tokyo"}`.
+`PATCH /api/v1/sites/{site}` changes the domain, the reporting timezone, or
+both: `{"domain": "new.com", "timezone": "Asia/Tokyo"}`. Stats are kept. The
+old domain is added to `aliases`: events sent to it still count for this
+site, and it still works in API paths. Returns `409` if another site uses the
+new domain.
 
-`DELETE /api/v1/sites/{domain}` deletes the site and all of its stats. This
+`DELETE /api/v1/sites/{site}/aliases/{domain}` removes an old domain, so it
+stops recording to this site and can be used for a new one.
+
+`DELETE /api/v1/sites/{site}` deletes the site and all of its stats. This
 can't be undone.
 
 ### Aggregate
 
-`GET /api/v1/sites/{domain}/aggregate`
+`GET /api/v1/sites/{site}/aggregate`
 
 Totals for the period, plus the same metrics for the previous period of equal
 length (`null` for `period=all`).
@@ -145,7 +155,7 @@ length (`null` for `period=all`).
 
 ### Timeseries
 
-`GET /api/v1/sites/{domain}/timeseries`
+`GET /api/v1/sites/{site}/timeseries`
 
 The same metrics per bucket. `date` is the bucket's start in the site's
 timezone. Every bucket in the range is included, so empty ones have zeros.
@@ -161,7 +171,7 @@ timezone. Every bucket in the range is included, so empty ones have zeros.
 
 ### Breakdown
 
-`GET /api/v1/sites/{domain}/breakdown/{dimension}?limit=10`
+`GET /api/v1/sites/{site}/breakdown/{dimension}?limit=10`
 
 Top values of a dimension, sorted by visitors. `limit` is 1–1000 (default 10).
 `total_visitors` is the total for the same period and filters, for computing
@@ -201,7 +211,7 @@ To list the links under one referrer domain:
 
 ### Realtime
 
-`GET /api/v1/sites/{domain}/realtime`
+`GET /api/v1/sites/{site}/realtime`
 
 Visitors seen in the last 5 minutes.
 
@@ -219,7 +229,7 @@ Errors are JSON with an `error` message:
 | `401` | Missing, wrong or revoked API key |
 | `403` | A read-only key tried to write |
 | `404` | No such site or endpoint |
-| `409` | The site already exists |
+| `409` | Another site already uses the domain |
 | `429` | Rate limit exceeded |
 
 ## Sending events

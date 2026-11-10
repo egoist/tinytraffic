@@ -180,7 +180,7 @@ function Rows(props: {
 export function BreakdownPanel(props: {
   title: string;
   tabs: PanelTab[];
-  domain: string;
+  site: string;
   params: StatsParams;
   onFilter: (dim: string, value: string) => void;
   class?: string;
@@ -198,8 +198,8 @@ export function BreakdownPanel(props: {
   };
   const tab = () => props.tabs.find((t) => t.dim === tabDim()) ?? props.tabs[0];
   const query = useQuery(() => ({
-    queryKey: ["breakdown", props.domain, tab().dim, props.params],
-    queryFn: () => api.breakdown(props.domain, tab().dim, props.params, ROWS),
+    queryKey: ["breakdown", props.site, tab().dim, props.params],
+    queryFn: () => api.breakdown(props.site, tab().dim, props.params, ROWS),
     placeholderData: keepPreviousData,
   }));
   const [open, setOpen] = createSignal(false);
@@ -264,7 +264,7 @@ export function BreakdownPanel(props: {
           onOpenChange={setOpen}
           title={`${props.title} · ${tab().label}`}
           tab={tab()}
-          domain={props.domain}
+          site={props.site}
           params={props.params}
           onFilter={(d, v) => {
             setOpen(false);
@@ -281,14 +281,14 @@ function DetailsDialog(props: {
   onOpenChange: (v: boolean) => void;
   title: string;
   tab: PanelTab;
-  domain: string;
+  site: string;
   params: StatsParams;
   onFilter: (dim: string, value: string) => void;
 }) {
   const [search, setSearch] = createSignal("");
   const query = useQuery(() => ({
-    queryKey: ["breakdown", props.domain, props.tab.dim, props.params, 200],
-    queryFn: () => api.breakdown(props.domain, props.tab.dim, props.params, 200),
+    queryKey: ["breakdown", props.site, props.tab.dim, props.params, 200],
+    queryFn: () => api.breakdown(props.site, props.tab.dim, props.params, 200),
   }));
   const rows = createMemo(() => {
     const s = search().toLowerCase();
@@ -329,7 +329,7 @@ function DetailsDialog(props: {
                       canExpand: (r) => (r.links ?? 0) > 0,
                       children: (r) => (
                         <ReferrerLinks
-                          site={props.domain}
+                          site={props.site}
                           referrer={r.value}
                           params={props.params}
                           total={ready(query)?.total_visitors ?? 0}

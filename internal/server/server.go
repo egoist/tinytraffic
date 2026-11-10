@@ -54,12 +54,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/info", s.private(s.info))
 	mux.HandleFunc("GET /api/sites", s.private(s.listSites))
 	mux.HandleFunc("POST /api/sites", s.private(s.createSite))
-	mux.HandleFunc("PATCH /api/sites/{domain}", s.private(s.updateSite))
-	mux.HandleFunc("DELETE /api/sites/{domain}", s.private(s.deleteSite))
-	mux.HandleFunc("GET /api/sites/{domain}/aggregate", s.private(s.aggregate))
-	mux.HandleFunc("GET /api/sites/{domain}/timeseries", s.private(s.timeseries))
-	mux.HandleFunc("GET /api/sites/{domain}/breakdown/{dim}", s.private(s.breakdown))
-	mux.HandleFunc("GET /api/sites/{domain}/realtime", s.private(s.realtime))
+	// {site} is the site's ID or one of its domains.
+	mux.HandleFunc("PATCH /api/sites/{site}", s.private(s.updateSite))
+	mux.HandleFunc("DELETE /api/sites/{site}", s.private(s.deleteSite))
+	mux.HandleFunc("DELETE /api/sites/{site}/aliases/{alias}", s.private(s.removeAlias))
+	mux.HandleFunc("GET /api/sites/{site}/aggregate", s.private(s.aggregate))
+	mux.HandleFunc("GET /api/sites/{site}/timeseries", s.private(s.timeseries))
+	mux.HandleFunc("GET /api/sites/{site}/breakdown/{dim}", s.private(s.breakdown))
+	mux.HandleFunc("GET /api/sites/{site}/realtime", s.private(s.realtime))
 	s.publicRoutes(mux)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
@@ -245,7 +247,7 @@ func (s *Server) createSite(w http.ResponseWriter, r *http.Request) {
 	}
 	site, err := s.Store.CreateSite(domain, tz)
 	if errors.Is(err, store.ErrExists) {
-		writeError(w, http.StatusConflict, "this site already exists")
+		writeError(w, http.StatusConflict, "a site already uses this domain")
 		return
 	}
 	if err != nil {
@@ -255,16 +257,44 @@ func (s *Server) createSite(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, site)
 }
 
+// site resolves the {site} path value, or answers 404.
+func (s *Server) site(w http.ResponseWriter, r *http.Request) (store.Site, bool) {
+	site, ok := s.Store.LookupSite(r.PathValue("site"))
+	if !ok {
+		writeError(w, http.StatusNotFound, "site not found")
+	}
+	return site, ok
+}
+
 func (s *Server) updateSite(w http.ResponseWriter, r *http.Request) {
+	site, ok := s.site(w, r)
+	if !ok {
+		return
+	}
 	var body siteBody
 	if !readJSON(w, r, &body) {
 		return
 	}
-	if _, err := time.LoadLocation(body.Timezone); err != nil || body.Timezone == "" {
-		writeError(w, http.StatusBadRequest, "unknown timezone")
+	if body.Domain == "" && body.Timezone == "" {
+		writeError(w, http.StatusBadRequest, "nothing to change: send a domain or timezone")
 		return
 	}
-	site, err := s.Store.UpdateSiteTimezone(r.PathValue("domain"), body.Timezone)
+	domain := store.NormalizeDomain(body.Domain)
+	if body.Domain != "" && !validDomain(domain) {
+		writeError(w, http.StatusBadRequest, "enter a domain like example.com")
+		return
+	}
+	if body.Timezone != "" {
+		if _, err := time.LoadLocation(body.Timezone); err != nil {
+			writeError(w, http.StatusBadRequest, "unknown timezone")
+			return
+		}
+	}
+	site, err := s.Store.UpdateSite(site.ID, store.SiteUpdate{Domain: domain, Timezone: body.Timezone})
+	if errors.Is(err, store.ErrExists) {
+		writeError(w, http.StatusConflict, "another site uses this domain")
+		return
+	}
 	if errors.Is(err, store.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "site not found")
 		return
@@ -276,8 +306,29 @@ func (s *Server) updateSite(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, site)
 }
 
+func (s *Server) removeAlias(w http.ResponseWriter, r *http.Request) {
+	site, ok := s.site(w, r)
+	if !ok {
+		return
+	}
+	site, err := s.Store.RemoveAlias(site.ID, r.PathValue("alias"))
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "alias not found")
+		return
+	}
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, site)
+}
+
 func (s *Server) deleteSite(w http.ResponseWriter, r *http.Request) {
-	err := s.Store.DeleteSite(r.PathValue("domain"))
+	site, ok := s.site(w, r)
+	if !ok {
+		return
+	}
+	err := s.Store.DeleteSite(site.ID)
 	if errors.Is(err, store.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "site not found")
 		return
@@ -292,9 +343,8 @@ func (s *Server) deleteSite(w http.ResponseWriter, r *http.Request) {
 // --- stats ---
 
 func (s *Server) query(w http.ResponseWriter, r *http.Request) (stats.Query, bool) {
-	site, ok := s.Store.SiteByDomain(r.PathValue("domain"))
+	site, ok := s.site(w, r)
 	if !ok {
-		writeError(w, http.StatusNotFound, "site not found")
 		return stats.Query{}, false
 	}
 	q, err := stats.ParseQuery(site, r.URL.Query(), time.Now(), func() (time.Time, bool) {
@@ -375,9 +425,8 @@ func (s *Server) breakdown(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) realtime(w http.ResponseWriter, r *http.Request) {
-	site, ok := s.Store.SiteByDomain(r.PathValue("domain"))
+	site, ok := s.site(w, r)
 	if !ok {
-		writeError(w, http.StatusNotFound, "site not found")
 		return
 	}
 	n, err := stats.Realtime(r.Context(), s.Store.DB, site.ID, time.Now())

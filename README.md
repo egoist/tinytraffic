@@ -62,6 +62,10 @@ Script attributes:
 | `data-hash` | Count `#/routes` as separate pages |
 | `data-outbound="false"` | Don't track outbound link clicks |
 
+If a site moves, change its domain in the site's settings. Stats are kept,
+and the old domain keeps recording to the same site until you remove it, so
+pages with the old snippet still count.
+
 Visits from localhost and automated browsers are ignored. To exclude your own
 visits, run `localStorage.tinytraffic_ignore = "true"` in the console on your
 site.

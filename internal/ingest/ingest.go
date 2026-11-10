@@ -159,11 +159,15 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Props:          encodeProps(p.P),
 	}
 
+	// Several domains can point to the same site, e.g. its current domain
+	// and an old one. Record the event once per site.
+	seen := map[int32]bool{}
 	for _, d := range domains {
 		site, ok := h.Store.SiteByDomain(d)
-		if !ok {
+		if !ok || seen[site.ID] {
 			continue
 		}
+		seen[site.ID] = true
 		e := base
 		e.SiteID = site.ID
 		visitor := visitorHash(cur, site.ID, ip, ua)

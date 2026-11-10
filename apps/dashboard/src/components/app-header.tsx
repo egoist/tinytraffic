@@ -20,10 +20,11 @@ import { ready } from "~/lib/query";
 
 export function AppHeader() {
   const params = useParams({ strict: false });
-  const domain = () => (params() as { domain?: string }).domain;
+  const siteId = () => (params() as { siteId?: string }).siteId;
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const sites = useQuery(() => ({ queryKey: ["sites"], queryFn: api.sites, enabled: !!domain() }));
+  const sites = useQuery(() => ({ queryKey: ["sites"], queryFn: api.sites, enabled: !!siteId() }));
+  const current = () => ready(sites)?.find((s) => String(s.id) === siteId());
   const [adding, setAdding] = createSignal(false);
   const [changingPassword, setChangingPassword] = createSignal(false);
   const logout = useMutation(() => ({
@@ -38,18 +39,18 @@ export function AppHeader() {
     <header class="sticky top-0 z-40 border-b bg-background/80 backdrop-blur-md">
       <div class="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 sm:px-6">
         <Link to="/" class="rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/50" aria-label="All sites">
-          <Show when={domain()} fallback={<Logo />}>
+          <Show when={siteId()} fallback={<Logo />}>
             <LogoMark />
           </Show>
         </Link>
 
-        <Show when={domain()}>
-          {(d) => (
+        <Show when={siteId()}>
+          {(id) => (
             <>
               <span class="text-lg font-light text-muted-foreground/50">/</span>
               <DropdownMenu placement="bottom-start">
                 <DropdownMenuTrigger as={Button} variant="ghost" size="sm" class="-ml-1 max-w-[60vw] gap-1.5 px-2 font-semibold">
-                  <span class="truncate">{d()}</span>
+                  <span class="truncate">{current()?.domain ?? "…"}</span>
                   <ChevronsUpDown class="text-muted-foreground" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent class="w-60">
@@ -57,8 +58,8 @@ export function AppHeader() {
                   <For each={ready(sites) ?? []}>
                     {(s) => (
                       <DropdownMenuItem
-                        checked={s.domain === d()}
-                        onSelect={() => navigate({ to: "/$domain", params: { domain: s.domain } })}
+                        checked={String(s.id) === id()}
+                        onSelect={() => navigate({ to: "/sites/$siteId", params: { siteId: String(s.id) } })}
                       >
                         <span class="truncate">{s.domain}</span>
                       </DropdownMenuItem>
@@ -75,13 +76,13 @@ export function AppHeader() {
         </Show>
 
         <div class="ml-auto flex items-center gap-1">
-          <Show when={domain()}>
-            {(d) => (
+          <Show when={siteId()}>
+            {(id) => (
               <Button
                 variant="ghost"
                 size="icon-sm"
                 aria-label="Site settings"
-                onClick={() => navigate({ to: "/$domain/settings", params: { domain: d() } })}
+                onClick={() => navigate({ to: "/sites/$siteId/settings", params: { siteId: id() } })}
               >
                 <Settings />
               </Button>

@@ -19,13 +19,13 @@ export const Route = createFileRoute("/_app/api-keys")({
 
 const endpoints: [method: string, path: string, what: string, write?: boolean][] = [
   ["GET", "/api/v1/sites", "Sites and their last-24h visitors"],
-  ["GET", "/api/v1/sites/{domain}/aggregate", "Visitors, visits, pageviews, bounce rate, duration"],
-  ["GET", "/api/v1/sites/{domain}/timeseries", "The same metrics per hour, day or month"],
-  ["GET", "/api/v1/sites/{domain}/breakdown/{dimension}", "Top pages, sources, countries, …"],
-  ["GET", "/api/v1/sites/{domain}/realtime", "Visitors in the last 5 minutes"],
+  ["GET", "/api/v1/sites/{site}/aggregate", "Visitors, visits, pageviews, bounce rate, duration"],
+  ["GET", "/api/v1/sites/{site}/timeseries", "The same metrics per hour, day or month"],
+  ["GET", "/api/v1/sites/{site}/breakdown/{dimension}", "Top pages, sources, countries, …"],
+  ["GET", "/api/v1/sites/{site}/realtime", "Visitors in the last 5 minutes"],
   ["POST", "/api/v1/sites", "Add a site", true],
-  ["PATCH", "/api/v1/sites/{domain}", "Change its timezone", true],
-  ["DELETE", "/api/v1/sites/{domain}", "Delete a site and its stats", true],
+  ["PATCH", "/api/v1/sites/{site}", "Change its domain or timezone", true],
+  ["DELETE", "/api/v1/sites/{site}", "Delete a site and its stats", true],
   ["POST", "/api/event", "Send events for your visitors from a server", true],
 ];
 

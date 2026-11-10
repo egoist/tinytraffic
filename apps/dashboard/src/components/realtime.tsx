@@ -3,10 +3,10 @@ import { api } from "~/lib/api";
 import { formatNumber } from "~/lib/format";
 import { ready } from "~/lib/query";
 
-export function Realtime(props: { domain: string }) {
+export function Realtime(props: { site: string }) {
   const q = useQuery(() => ({
-    queryKey: ["realtime", props.domain],
-    queryFn: () => api.realtime(props.domain),
+    queryKey: ["realtime", props.site],
+    queryFn: () => api.realtime(props.site),
     refetchInterval: 15_000,
   }));
   const n = () => ready(q)?.visitors ?? 0;

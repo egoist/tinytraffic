@@ -192,7 +192,7 @@ func seedCmd(args []string) error {
 	defer st.Close()
 	site, ok := st.SiteByDomain(fs.Arg(0))
 	if ok && *reset {
-		if err := st.DeleteSite(site.Domain); err != nil {
+		if err := st.DeleteSite(site.ID); err != nil {
 			return err
 		}
 		ok = false

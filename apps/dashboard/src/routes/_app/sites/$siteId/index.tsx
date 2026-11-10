@@ -24,7 +24,7 @@ type DashboardSearch = {
 const metricKeys = new Set<string>(metricDefs.map((m) => m.key));
 const isDate = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
 
-export const Route = createFileRoute("/_app/$domain/")({
+export const Route = createFileRoute("/_app/sites/$siteId/")({
   validateSearch: (s: Record<string, unknown>): DashboardSearch => {
     const period = periodValues.has(s.period as string) ? (s.period as Period) : undefined;
     const custom = period === "custom" && isDate(s.from) && isDate(s.to);
@@ -43,7 +43,7 @@ function Dashboard() {
   const params = Route.useParams();
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
-  const domain = () => params().domain;
+  const siteId = () => params().siteId;
 
   const stats = createMemo<StatsParams>(() => ({
     period: search().period ?? "30d",
@@ -55,14 +55,14 @@ function Dashboard() {
   const metricDef = () => metricDefs.find((m) => m.key === metric())!;
 
   const aggregate = useQuery(() => ({
-    queryKey: ["aggregate", domain(), stats()],
-    queryFn: () => api.aggregate(domain(), stats()),
+    queryKey: ["aggregate", siteId(), stats()],
+    queryFn: () => api.aggregate(siteId(), stats()),
     placeholderData: keepPreviousData,
   }));
   const info = useQuery(() => ({ queryKey: ["info"], queryFn: api.info, staleTime: Infinity }));
   const series = useQuery(() => ({
-    queryKey: ["timeseries", domain(), stats()],
-    queryFn: () => api.timeseries(domain(), stats()),
+    queryKey: ["timeseries", siteId(), stats()],
+    queryFn: () => api.timeseries(siteId(), stats()),
     placeholderData: keepPreviousData,
   }));
 
@@ -82,7 +82,7 @@ function Dashboard() {
   return (
     <div class="flex flex-col gap-4">
       <div class="flex flex-wrap items-center justify-between gap-3">
-        <Realtime domain={domain()} />
+        <Realtime site={siteId()} />
         <PeriodPicker value={{ period: stats().period as Period, from: stats().from, to: stats().to }} onChange={setPeriod} />
       </div>
 
@@ -127,7 +127,7 @@ function Dashboard() {
       <div class="grid gap-4 md:grid-cols-2">
         <BreakdownPanel
           title="Sources"
-          domain={domain()}
+          site={siteId()}
           params={stats()}
           onFilter={addFilter}
           tabs={[
@@ -138,7 +138,7 @@ function Dashboard() {
         />
         <BreakdownPanel
           title="Pages"
-          domain={domain()}
+          site={siteId()}
           params={stats()}
           onFilter={addFilter}
           tabs={[
@@ -149,7 +149,7 @@ function Dashboard() {
         />
         <BreakdownPanel
           title="Locations"
-          domain={domain()}
+          site={siteId()}
           params={stats()}
           onFilter={addFilter}
           tabs={[
@@ -177,7 +177,7 @@ function Dashboard() {
         />
         <BreakdownPanel
           title="Devices"
-          domain={domain()}
+          site={siteId()}
           params={stats()}
           onFilter={addFilter}
           tabs={[
@@ -189,14 +189,14 @@ function Dashboard() {
         <BreakdownPanel
           title="Goals"
           class="md:col-span-2"
-          domain={domain()}
+          site={siteId()}
           params={stats()}
           onFilter={addFilter}
           tabs={[{ dim: "event", label: "Events", column: "Custom event", countLabel: "Events", conversion: true }]}
           empty={
             <>
               No custom events yet.{" "}
-              <Link to="/$domain/settings" params={{ domain: domain() }} class="underline underline-offset-4 hover:text-foreground">
+              <Link to="/sites/$siteId/settings" params={{ siteId: siteId() }} class="underline underline-offset-4 hover:text-foreground">
                 How to send one
               </Link>
             </>
