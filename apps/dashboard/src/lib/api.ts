@@ -52,7 +52,13 @@ export type QueryMeta = {
 export type Aggregate = { query: QueryMeta; current: Metrics; previous: Metrics | null };
 export type Point = Metrics & { date: string };
 export type Timeseries = { query: QueryMeta; points: Point[] };
-export type BreakdownRow = { value: string; visitors: number; count: number };
+export type BreakdownRow = {
+  value: string;
+  visitors: number;
+  count: number;
+  /** Referrer domains: number of distinct links (with a path) under it. */
+  links?: number;
+};
 export type Breakdown = { rows: BreakdownRow[]; total_visitors: number };
 
 export type StatsParams = { period: string; from?: string; to?: string; f?: string[] };

@@ -53,7 +53,12 @@ var (
 		{source{"chatgpt.com", "ChatGPT", "", "", ""}, 3},
 		{source{"bsky.app", "Bluesky", "", "", ""}, 2},
 		{source{"", "newsletter", "newsletter", "email", "november-issue"}, 3},
-		{source{"lobste.rs", "Lobsters", "", "", ""}, 2},
+		{source{"lobste.rs/s/x7kq2m/building_tiny_analytics_tool", "Lobsters", "", "", ""}, 2},
+		{source{"t.co/Xk2pQ9vLmA", "Twitter", "", "", ""}, 2},
+		{source{"someblog.dev/posts/my-favorite-tools", "someblog.dev", "", "", ""}, 2},
+		{source{"someblog.dev/posts/self-hosting-in-2026", "someblog.dev", "", "", ""}, 1},
+		{source{"devweekly.io/issues/142", "devweekly.io", "", "", ""}, 2},
+		{source{"discuss.example.org/t/privacy-friendly-analytics/381", "discuss.example.org", "", "", ""}, 1},
 	}
 	places = []weighted[place]{
 		{place{"US", "California", "San Francisco"}, 10}, {place{"US", "New York", "New York"}, 8},

@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from "@tanstack/solid-query";
-import { Laptop, Maximize2, Monitor, Search, Smartphone, Tablet } from "lucide-solid";
+import { ChevronRight, ExternalLink, Laptop, Maximize2, Monitor, Search, Smartphone, Tablet } from "lucide-solid";
 import { createMemo, createSignal, For, Match, Show, Switch, type JSX } from "solid-js";
 import { api, type BreakdownRow, type StatsParams } from "~/lib/api";
 import { valueLabel } from "~/lib/dims";
@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Skeleton } from "./ui/skeleton";
 import { TextTabs } from "./ui/tabs";
+import { ready } from "~/lib/query";
 
 export type PanelTab = {
   dim: string;
@@ -46,10 +47,41 @@ function RowLabel(props: { dim: string; value: string }) {
           }}
         </Match>
       </Switch>
-      <span class={cn("truncate", !props.value && "text-muted-foreground")}>{valueLabel(props.dim, props.value)}</span>
+      <Show
+        when={props.dim === "referrer_url" && props.value}
+        fallback={<span class={cn("truncate", !props.value && "text-muted-foreground")}>{valueLabel(props.dim, props.value)}</span>}
+      >
+        {/* under a domain, the path is what matters */}
+        <LinkLabel value={props.value} />
+      </Show>
     </span>
   );
 }
+
+function LinkLabel(props: { value: string }) {
+  const slash = () => props.value.indexOf("/");
+  return (
+    <Show
+      when={slash() >= 0}
+      fallback={
+        <span class="truncate text-muted-foreground" title="The browser only sent the domain">
+          {props.value} <span class="text-xs">· domain only</span>
+        </span>
+      }
+    >
+      <span class="truncate">
+        <span class="text-muted-foreground">{props.value.slice(0, slash())}</span>
+        {props.value.slice(slash())}
+      </span>
+    </Show>
+  );
+}
+
+type Expand = {
+  /** Rows that have children get a disclosure arrow. */
+  canExpand: (row: BreakdownRow) => boolean;
+  children: (row: BreakdownRow) => JSX.Element;
+};
 
 function Rows(props: {
   tab: PanelTab;
@@ -57,40 +89,85 @@ function Rows(props: {
   total: number;
   onFilter: (dim: string, value: string) => void;
   showCount?: boolean;
+  expand?: Expand;
 }) {
   const max = createMemo(() => Math.max(1, ...props.rows.map((r) => r.visitors)));
+  const [expanded, setExpanded] = createSignal<Set<string>>(new Set());
+  const toggle = (v: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      next.has(v) ? next.delete(v) : next.add(v);
+      return next;
+    });
   return (
     <ul class="flex flex-col gap-1">
       <For each={props.rows}>
         {(row) => {
           const share = () => (props.total ? (row.visitors / props.total) * 100 : 0);
+          const open = () => expanded().has(row.value);
           return (
             <li>
-              <button
-                type="button"
-                onClick={() => props.onFilter(props.tab.dim, row.value)}
-                class="group relative flex h-8 w-full cursor-pointer items-center gap-3 rounded-md text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                title={`Filter by ${valueLabel(props.tab.dim, row.value)}`}
-              >
-                <span
-                  class="absolute inset-y-0 left-0 rounded-md bg-bar transition-[width] duration-300 group-hover:brightness-95 dark:group-hover:brightness-125"
-                  style={{ width: `${(row.visitors / max()) * 100}%` }}
-                />
-                <span class="relative min-w-0 flex-1 px-2.5">
-                  <RowLabel dim={props.tab.dim} value={row.value} />
-                </span>
-                <span class="relative flex shrink-0 items-center gap-3 pr-1 tabular">
-                  <Show when={props.showCount && props.tab.countLabel}>
-                    <span class="w-16 text-right text-muted-foreground">{formatNumber(row.count)}</span>
-                  </Show>
-                  <span class="w-12 text-right font-medium" title={formatFull(row.visitors)}>
-                    {formatNumber(row.visitors)}
+              <div class="flex items-center gap-1">
+                <Show when={props.expand}>
+                  {(ex) => (
+                    <Show when={ex().canExpand(row)} fallback={<span class="w-6 shrink-0" />}>
+                      <button
+                        type="button"
+                        onClick={() => toggle(row.value)}
+                        aria-expanded={open()}
+                        aria-label={`${open() ? "Hide" : "Show"} links from ${row.value}`}
+                        class="grid size-6 shrink-0 cursor-pointer place-items-center rounded text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+                      >
+                        <ChevronRight class={cn("size-4 transition-transform", open() && "rotate-90")} />
+                      </button>
+                    </Show>
+                  )}
+                </Show>
+                <button
+                  type="button"
+                  onClick={() => props.onFilter(props.tab.dim, row.value)}
+                  class="group relative flex h-8 min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-md text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                  title={`Filter by ${valueLabel(props.tab.dim, row.value)}`}
+                >
+                  <span
+                    class="absolute inset-y-0 left-0 rounded-md bg-bar transition-[width] duration-300 group-hover:brightness-95 dark:group-hover:brightness-125"
+                    style={{ width: `${(row.visitors / max()) * 100}%` }}
+                  />
+                  <span class="relative min-w-0 flex-1 px-2.5">
+                    <RowLabel dim={props.tab.dim} value={row.value} />
                   </span>
-                  <span class="w-11 text-right text-xs text-muted-foreground">
-                    {formatPercent(share(), share() < 10 && props.tab.conversion ? 1 : 0)}
+                  <span class="relative flex shrink-0 items-center gap-3 pr-1 tabular">
+                    <Show when={props.showCount && props.tab.countLabel}>
+                      <span class="w-16 text-right text-muted-foreground">{formatNumber(row.count)}</span>
+                    </Show>
+                    <span class="w-12 text-right font-medium" title={formatFull(row.visitors)}>
+                      {formatNumber(row.visitors)}
+                    </span>
+                    <span class="w-11 text-right text-xs text-muted-foreground">
+                      {formatPercent(share(), share() < 10 && props.tab.conversion ? 1 : 0)}
+                    </span>
                   </span>
-                </span>
-              </button>
+                </button>
+                {/* Trailing slot keeps number columns aligned between domain and link rows. */}
+                <Show
+                  when={props.tab.dim === "referrer_url" && row.value.includes("/")}
+                  fallback={<Show when={props.expand || props.tab.dim === "referrer_url"}>{<span class="w-6 shrink-0" />}</Show>}
+                >
+                  <a
+                    href={`https://${row.value}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="grid size-6 shrink-0 place-items-center rounded text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+                    aria-label={`Open ${row.value}`}
+                    title="Open link"
+                  >
+                    <ExternalLink class="size-3.5" />
+                  </a>
+                </Show>
+              </div>
+              <Show when={props.expand && open()}>
+                <div class="mt-1 mb-2 ml-7 border-l pl-2">{props.expand!.children(row)}</div>
+              </Show>
             </li>
           );
         }}
@@ -134,7 +211,13 @@ export function BreakdownPanel(props: {
         </span>
       </div>
 
-      <div class={cn("flex-1 transition-opacity", props.tabs.length > 1 ? "min-h-[328px]" : "min-h-32", query.isPlaceholderData && "opacity-60")}>
+      <div
+        class={cn(
+          "flex-1 transition-opacity",
+          props.tabs.length > 1 ? "min-h-[328px]" : "min-h-32",
+          query.isPlaceholderData && "opacity-60",
+        )}
+      >
         <Switch>
           <Match when={query.isPending}>
             <div class="flex flex-col gap-1">
@@ -144,16 +227,16 @@ export function BreakdownPanel(props: {
           <Match when={query.isError}>
             <p class="py-12 text-center text-sm text-muted-foreground">Couldn't load this panel.</p>
           </Match>
-          <Match when={query.data && query.data.rows.length === 0}>
+          <Match when={ready(query)?.rows.length === 0}>
             <div class="py-12 text-center text-sm text-muted-foreground">{props.empty ?? "No data yet"}</div>
           </Match>
-          <Match when={query.data}>
+          <Match when={ready(query)}>
             {(data) => <Rows tab={tab()} rows={data().rows} total={data().total_visitors} onFilter={props.onFilter} />}
           </Match>
         </Switch>
       </div>
 
-      <Show when={(query.data?.rows.length ?? 0) >= ROWS}>
+      <Show when={(ready(query)?.rows.length ?? 0) >= ROWS || ready(query)?.rows.some((r) => (r.links ?? 0) > 0)}>
         <div class="mt-2 flex justify-center">
           <Button variant="ghost" size="sm" class="text-muted-foreground" onClick={() => setOpen(true)}>
             <Maximize2 class="!size-3.5" /> Details
@@ -195,7 +278,7 @@ function DetailsDialog(props: {
   }));
   const rows = createMemo(() => {
     const s = search().toLowerCase();
-    const all = query.data?.rows ?? [];
+    const all = ready(query)?.rows ?? [];
     return s ? all.filter((r) => valueLabel(props.tab.dim, r.value).toLowerCase().includes(s)) : all;
   });
   return (
@@ -208,9 +291,9 @@ function DetailsDialog(props: {
           <Search class="absolute top-2.5 left-3 size-4 text-muted-foreground" />
           <Input placeholder="Search" class="pl-9" value={search()} onInput={(e) => setSearch(e.currentTarget.value)} />
         </div>
-        <div class="flex items-center justify-between px-2.5 text-xs font-medium text-muted-foreground">
+        <div class={cn("flex items-center justify-between px-2.5 text-xs font-medium text-muted-foreground", props.tab.dim === "referrer" && "pl-9")}>
           <span>{props.tab.column}</span>
-          <span class="flex gap-3 pr-1">
+          <span class={cn("flex gap-3", props.tab.dim === "referrer" ? "pr-8" : "pr-1")}>
             <Show when={props.tab.countLabel}>
               <span class="w-16 text-right">{props.tab.countLabel}</span>
             </Show>
@@ -220,7 +303,29 @@ function DetailsDialog(props: {
         </div>
         <div class="-mx-1 max-h-[55vh] overflow-y-auto px-1">
           <Show when={!query.isPending} fallback={<Skeleton class="h-40" />}>
-            <Rows tab={props.tab} rows={rows()} total={query.data?.total_visitors ?? 0} onFilter={props.onFilter} showCount />
+            <Rows
+              tab={props.tab}
+              rows={rows()}
+              total={ready(query)?.total_visitors ?? 0}
+              onFilter={props.onFilter}
+              showCount
+              expand={
+                props.tab.dim === "referrer"
+                  ? {
+                      canExpand: (r) => (r.links ?? 0) > 0,
+                      children: (r) => (
+                        <ReferrerLinks
+                          site={props.domain}
+                          referrer={r.value}
+                          params={props.params}
+                          total={ready(query)?.total_visitors ?? 0}
+                          onFilter={props.onFilter}
+                        />
+                      ),
+                    }
+                  : undefined
+              }
+            />
             <Show when={rows().length === 0}>
               <p class="py-10 text-center text-sm text-muted-foreground">Nothing matches</p>
             </Show>
@@ -228,5 +333,30 @@ function DetailsDialog(props: {
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+const linkTab: PanelTab = { dim: "referrer_url", label: "Links", column: "Link", countLabel: "Pageviews" };
+
+/** The individual links under one referrer domain. */
+function ReferrerLinks(props: {
+  site: string;
+  referrer: string;
+  params: StatsParams;
+  total: number;
+  onFilter: (dim: string, value: string) => void;
+}) {
+  const params = () => ({
+    ...props.params,
+    f: [...(props.params.f ?? []).filter((f) => !f.startsWith("referrer:")), `referrer:${props.referrer}`],
+  });
+  const query = useQuery(() => ({
+    queryKey: ["breakdown", props.site, "referrer_url", params(), 100],
+    queryFn: () => api.breakdown(props.site, "referrer_url", params(), 100),
+  }));
+  return (
+    <Show when={ready(query)} fallback={<Skeleton class="h-8" />}>
+      {(data) => <Rows tab={linkTab} rows={data().rows} total={props.total} onFilter={props.onFilter} showCount />}
+    </Show>
   );
 }

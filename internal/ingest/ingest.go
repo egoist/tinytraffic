@@ -125,7 +125,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		pathname += "#" + pageURL.Fragment
 	}
 	q := pageURL.Query()
-	refHost, source := parseReferrer(p.R, pageURL.Hostname())
+	referrer, source := parseReferrer(p.R, pageURL.Hostname())
 	if s := first(q.Get("utm_source"), q.Get("ref"), q.Get("source")); s != "" {
 		source = normalizeUTMSource(s)
 	}
@@ -137,7 +137,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Name:           clip(p.N, 120),
 		Hostname:       clip(hostname, 255),
 		Pathname:       clip(pathname, 2000),
-		Referrer:       clip(refHost, 255),
+		Referrer:       clip(referrer, 1000),
 		ReferrerSource: clip(source, 255),
 		UTMSource:      clip(q.Get("utm_source"), 255),
 		UTMMedium:      clip(q.Get("utm_medium"), 255),

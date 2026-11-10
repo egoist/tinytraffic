@@ -83,9 +83,14 @@ func sourceForHost(host string) string {
 	return host
 }
 
-// parseReferrer returns the referrer host and its source name. Referrers
-// from the tracked site itself are internal and count as direct.
-func parseReferrer(raw, pageHost string) (host, source string) {
+// parseReferrer returns the referrer to store and its source name.
+//
+// The stored referrer is host + path, e.g. "someblog.dev/posts/tools". The
+// query string and fragment are dropped since they can carry tokens or
+// personal data. Most browsers only send the origin for cross-site links, so
+// many referrers are just a host. Referrers from the tracked site itself are
+// internal and count as direct.
+func parseReferrer(raw, pageHost string) (referrer, source string) {
 	if raw == "" {
 		return "", ""
 	}
@@ -95,20 +100,19 @@ func parseReferrer(raw, pageHost string) (host, source string) {
 	}
 	if u.Scheme == "android-app" {
 		// e.g. android-app://com.google.android.gm
-		host = u.Host
-		if host == "com.google.android.gm" {
-			return host, "Gmail"
+		if u.Host == "com.google.android.gm" {
+			return u.Host, "Gmail"
 		}
-		return host, host
+		return u.Host, u.Host
 	}
 	if u.Scheme != "http" && u.Scheme != "https" {
 		return "", ""
 	}
-	host = strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
-	if host == "" || host == strings.TrimPrefix(pageHost, "www.") {
+	host := strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
+	if host == "" || host == strings.TrimPrefix(strings.ToLower(pageHost), "www.") {
 		return "", ""
 	}
-	return host, sourceForHost(host)
+	return host + strings.TrimRight(u.Path, "/"), sourceForHost(host)
 }
 
 func normalizeUTMSource(s string) string {

@@ -16,6 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
+import { ready } from "~/lib/query";
 
 export function AppHeader() {
   const params = useParams({ strict: false });
@@ -53,7 +54,7 @@ export function AppHeader() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent class="w-60">
                   <DropdownMenuLabel>Sites</DropdownMenuLabel>
-                  <For each={sites.data ?? []}>
+                  <For each={ready(sites) ?? []}>
                     {(s) => (
                       <DropdownMenuItem
                         checked={s.domain === d()}

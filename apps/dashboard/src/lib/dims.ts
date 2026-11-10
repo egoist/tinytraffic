@@ -6,6 +6,7 @@ export const dimLabels: Record<string, string> = {
   exit_page: "Exit page",
   source: "Source",
   referrer: "Referrer",
+  referrer_url: "Referrer link",
   utm_source: "UTM source",
   utm_medium: "UTM medium",
   utm_campaign: "UTM campaign",
@@ -25,6 +26,7 @@ export function valueLabel(dim: string, value: string) {
   switch (dim) {
     case "source":
     case "referrer":
+    case "referrer_url":
       return "Direct / None";
     case "utm_source":
     case "utm_medium":

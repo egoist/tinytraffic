@@ -7,6 +7,7 @@ import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { Input, Label } from "~/components/ui/input";
 import { api } from "~/lib/api";
+import { ready } from "~/lib/query";
 
 export const Route = createFileRoute("/login")({
   validateSearch: (s: Record<string, unknown>): { redirect?: string } => ({
@@ -25,7 +26,7 @@ function Login() {
   const navigate = useNavigate();
   const search = Route.useSearch();
   const auth = useQuery(() => ({ queryKey: ["auth"], queryFn: api.auth }));
-  const setup = () => auth.data?.needs_setup ?? false;
+  const setup = () => ready(auth)?.needs_setup ?? false;
   const [password, setPassword] = createSignal("");
   const [confirm, setConfirm] = createSignal("");
 

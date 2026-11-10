@@ -143,6 +143,9 @@ type Row struct {
 	// Count is pageviews for pages, visits for entry/exit pages, completions
 	// for events and pageviews for everything else.
 	Count int64 `json:"count"`
+	// Links is, for referrer domains, how many distinct links with a path
+	// were seen under the domain (see the referrer_url dimension).
+	Links int64 `json:"links,omitempty"`
 }
 
 type BreakdownResult struct {
@@ -165,12 +168,12 @@ WITH s AS (
 	       arg_min(pathname, ts) AS entry, arg_max(pathname, ts) AS exit
 	FROM events WHERE %s AND name = 'pageview' GROUP BY session_id
 )
-SELECT %s, count(DISTINCT visitor_id) AS visitors, count(*) AS c FROM s
+SELECT %s, count(DISTINCT visitor_id) AS visitors, count(*) AS c, 0 FROM s
 GROUP BY 1 ORDER BY visitors DESC, c DESC, 1 LIMIT ?`, where, col)
 		totalSQL = fmt.Sprintf(`SELECT count(DISTINCT visitor_id) FROM events WHERE %s AND name = 'pageview'`, where)
 	case "event":
 		sqlText = fmt.Sprintf(`
-SELECT name, count(DISTINCT visitor_id) AS visitors, count(*) AS c FROM events
+SELECT name, count(DISTINCT visitor_id) AS visitors, count(*) AS c, 0 FROM events
 WHERE %s AND name <> 'pageview' GROUP BY 1 ORDER BY visitors DESC, c DESC, 1 LIMIT ?`, where)
 		totalSQL = fmt.Sprintf(`SELECT count(DISTINCT visitor_id) FROM events WHERE %s`, where)
 	default:
@@ -178,13 +181,16 @@ WHERE %s AND name <> 'pageview' GROUP BY 1 ORDER BY visitors DESC, c DESC, 1 LIM
 		if !ok {
 			return BreakdownResult{}, fmt.Errorf("unknown dimension %q", dim)
 		}
-		extra := ""
+		extra, links := "", "0"
 		if dim == "page" {
 			extra = " AND name = 'pageview'"
 		}
+		if dim == "referrer" {
+			links = "count(DISTINCT referrer) FILTER (WHERE contains(referrer, '/'))"
+		}
 		sqlText = fmt.Sprintf(`
-SELECT %s, count(DISTINCT visitor_id) AS visitors, count(*) FILTER (WHERE name = 'pageview') AS c FROM events
-WHERE %s%s GROUP BY 1 ORDER BY visitors DESC, c DESC, 1 LIMIT ?`, col, where, extra)
+SELECT %s, count(DISTINCT visitor_id) AS visitors, count(*) FILTER (WHERE name = 'pageview') AS c, %s FROM events
+WHERE %s%s GROUP BY 1 ORDER BY visitors DESC, c DESC, 1 LIMIT ?`, col, links, where, extra)
 		totalSQL = fmt.Sprintf(`SELECT count(DISTINCT visitor_id) FROM events WHERE %s%s`, where, extra)
 	}
 
@@ -196,7 +202,7 @@ WHERE %s%s GROUP BY 1 ORDER BY visitors DESC, c DESC, 1 LIMIT ?`, col, where, ex
 	defer rows.Close()
 	for rows.Next() {
 		var r Row
-		if err := rows.Scan(&r.Value, &r.Visitors, &r.Count); err != nil {
+		if err := rows.Scan(&r.Value, &r.Visitors, &r.Count, &r.Links); err != nil {
 			return res, err
 		}
 		res.Rows = append(res.Rows, r)

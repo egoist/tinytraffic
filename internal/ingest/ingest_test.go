@@ -12,19 +12,22 @@ import (
 )
 
 func TestParseReferrer(t *testing.T) {
-	cases := []struct{ ref, page, host, source string }{
+	cases := []struct{ ref, page, referrer, source string }{
 		{"https://www.google.co.uk/", "example.com", "google.co.uk", "Google"},
-		{"https://news.ycombinator.com/item?id=1", "example.com", "news.ycombinator.com", "Hacker News"},
+		{"https://news.ycombinator.com/item?id=1", "example.com", "news.ycombinator.com/item", "Hacker News"},
 		{"https://m.facebook.com/", "example.com", "m.facebook.com", "Facebook"},
-		{"https://gemini.google.com/app", "example.com", "gemini.google.com", "Gemini"},
-		{"https://blog.someone.dev/post", "example.com", "blog.someone.dev", "blog.someone.dev"},
+		{"https://gemini.google.com/app", "example.com", "gemini.google.com/app", "Gemini"},
+		{"https://Blog.Someone.dev/posts/tools/?token=secret#top", "example.com", "blog.someone.dev/posts/tools", "blog.someone.dev"},
+		{"https://t.co/AbC123", "example.com", "t.co/AbC123", "Twitter"},
 		{"https://www.example.com/other", "example.com", "", ""},
+		{"https://example.com/other", "www.Example.com", "", ""},
+		{"android-app://com.google.android.gm", "example.com", "com.google.android.gm", "Gmail"},
 		{"", "example.com", "", ""},
 	}
 	for _, c := range cases {
-		host, source := parseReferrer(c.ref, c.page)
-		if host != c.host || source != c.source {
-			t.Errorf("parseReferrer(%q) = %q, %q; want %q, %q", c.ref, host, source, c.host, c.source)
+		referrer, source := parseReferrer(c.ref, c.page)
+		if referrer != c.referrer || source != c.source {
+			t.Errorf("parseReferrer(%q) = %q, %q; want %q, %q", c.ref, referrer, source, c.referrer, c.source)
 		}
 	}
 }
@@ -50,7 +53,7 @@ func TestHandler(t *testing.T) {
 		h.ServeHTTP(rec, req)
 		return rec.Code
 	}
-	page := `{"n":"pageview","u":"https://www.example.com/docs?utm_source=hn","d":"example.com","r":"https://news.ycombinator.com/","w":390}`
+	page := `{"n":"pageview","u":"https://www.example.com/docs?utm_source=hn","d":"example.com","r":"https://news.ycombinator.com/item?id=42","w":390}`
 	if code := send(chromeUA, page); code != http.StatusAccepted {
 		t.Fatalf("status %d", code)
 	}
@@ -63,29 +66,29 @@ func TestHandler(t *testing.T) {
 	}
 	w.Close()
 
-	rows, err := st.DB.Query(`SELECT name, pathname, hostname, referrer_source, device, props, visitor_id, session_id FROM events WHERE site_id = ? ORDER BY ts`, site.ID)
+	rows, err := st.DB.Query(`SELECT name, pathname, hostname, referrer, referrer_source, device, props, visitor_id, session_id FROM events WHERE site_id = ? ORDER BY ts`, site.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer rows.Close()
 	type row struct {
-		name, path, host, source, device, props string
-		visitor, session                        uint64
+		name, path, host, referrer, source, device, props string
+		visitor, session                                  uint64
 	}
 	var got []row
 	for rows.Next() {
 		var r row
-		rows.Scan(&r.name, &r.path, &r.host, &r.source, &r.device, &r.props, &r.visitor, &r.session)
+		rows.Scan(&r.name, &r.path, &r.host, &r.referrer, &r.source, &r.device, &r.props, &r.visitor, &r.session)
 		got = append(got, r)
 	}
 	if len(got) != 2 {
 		t.Fatalf("got %d events, want 2: %+v", len(got), got)
 	}
-	if got[0].path != "/docs" || got[0].host != "example.com" || got[0].source != "Hacker News" || got[0].device != "Mobile" {
+	if got[0].path != "/docs" || got[0].host != "example.com" || got[0].referrer != "news.ycombinator.com/item" || got[0].source != "Hacker News" || got[0].device != "Mobile" {
 		t.Errorf("pageview: %+v", got[0])
 	}
-	if got[1].source != "Hacker News" {
-		t.Errorf("later events should keep the session's source, got %q", got[1].source)
+	if got[1].source != "Hacker News" || got[1].referrer != "news.ycombinator.com/item" {
+		t.Errorf("later events should keep the session's referrer and source, got %q, %q", got[1].referrer, got[1].source)
 	}
 	if got[1].props != `{"plan":"pro","seats":"3"}` {
 		t.Errorf("props: %s", got[1].props)

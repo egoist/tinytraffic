@@ -11,6 +11,7 @@ import { Card } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
 import { api, type StatsParams } from "~/lib/api";
 import { periodValues, type Period } from "~/lib/dims";
+import { ready } from "~/lib/query";
 
 type DashboardSearch = {
   period?: Period;
@@ -102,14 +103,14 @@ function Dashboard() {
       <Card class="overflow-hidden">
         <div class="border-b">
           <MetricTiles
-            current={aggregate.data?.current}
-            previous={aggregate.data?.previous}
+            current={ready(aggregate)?.current}
+            previous={ready(aggregate)?.previous}
             selected={metric()}
             onSelect={(k) => navigate({ search: (prev) => ({ ...prev, metric: k === "visitors" ? undefined : k }) })}
           />
         </div>
         <div class={`px-3 pt-5 pb-2 transition-opacity sm:px-5 ${series.isPlaceholderData ? "opacity-60" : ""}`}>
-          <Show when={series.data} fallback={<Skeleton class="h-[260px]" />}>
+          <Show when={ready(series)} fallback={<Skeleton class="h-[260px]" />}>
             {(data) => (
               <TrafficChart
                 points={data().points}

@@ -134,3 +134,40 @@ func TestFiltersAndBreakdown(t *testing.T) {
 		t.Errorf("aggregate: got %+v", agg.Current)
 	}
 }
+
+func TestReferrerDomainsAndLinks(t *testing.T) {
+	st := openTestStore(t)
+	site, _ := st.CreateSite("example.com", "UTC")
+	now := time.Now().UTC()
+	var events []store.Event
+	for i, ref := range []string{"someblog.dev/posts/a", "someblog.dev/posts/a", "someblog.dev/posts/b", "someblog.dev", "google.com", ""} {
+		events = append(events, store.Event{Timestamp: now.Add(-time.Hour), SiteID: site.ID, Name: "pageview",
+			Pathname: "/", Referrer: ref, VisitorID: uint64(i), SessionID: uint64(i)})
+	}
+	if err := store.InsertEvents(context.Background(), st.DB, events); err != nil {
+		t.Fatal(err)
+	}
+	q, _ := ParseQuery(site, url.Values{"period": {"7d"}}, now, nil)
+	res, err := Breakdown(context.Background(), st.DB, q, "referrer", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Rows) != 3 || res.Rows[0] != (Row{Value: "someblog.dev", Visitors: 4, Count: 4, Links: 2}) {
+		t.Fatalf("domains: %+v", res.Rows)
+	}
+	for _, r := range res.Rows[1:] {
+		if r.Links != 0 {
+			t.Errorf("%q should have no links: %+v", r.Value, r)
+		}
+	}
+
+	q, _ = ParseQuery(site, url.Values{"period": {"7d"}, "f": {"referrer:someblog.dev"}}, now, nil)
+	res, err = Breakdown(context.Background(), st.DB, q, "referrer_url", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Row{{"someblog.dev/posts/a", 2, 2, 0}, {"someblog.dev", 1, 1, 0}, {"someblog.dev/posts/b", 1, 1, 0}}
+	if fmt.Sprint(res.Rows) != fmt.Sprint(want) {
+		t.Errorf("links under someblog.dev: got %+v, want %+v", res.Rows, want)
+	}
+}

@@ -30,10 +30,13 @@ type Filter struct {
 
 // columns maps filter/breakdown dimensions to event columns.
 var columns = map[string]string{
-	"page":         "pathname",
-	"hostname":     "hostname",
-	"source":       "referrer_source",
-	"referrer":     "referrer",
+	"page":     "pathname",
+	"hostname": "hostname",
+	"source":   "referrer_source",
+	// Referrers are stored as host + path; "referrer" groups them by host and
+	// "referrer_url" lists the individual links.
+	"referrer":     "split_part(referrer, '/', 1)",
+	"referrer_url": "referrer",
 	"utm_source":   "utm_source",
 	"utm_medium":   "utm_medium",
 	"utm_campaign": "utm_campaign",

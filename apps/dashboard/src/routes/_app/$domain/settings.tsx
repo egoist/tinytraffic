@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input, Label, NativeSelect } from "~/components/ui/input";
 import { api } from "~/lib/api";
 import { timezones } from "~/lib/timezones";
+import { ready } from "~/lib/query";
 
 export const Route = createFileRoute("/_app/$domain/settings")({
   validateSearch: (s: Record<string, unknown>): { welcome?: boolean } => ({ welcome: s.welcome === true || undefined }),
@@ -20,7 +21,7 @@ function Settings() {
   const search = Route.useSearch();
   const domain = () => params().domain;
   const sites = useQuery(() => ({ queryKey: ["sites"], queryFn: api.sites }));
-  const site = () => sites.data?.find((s) => s.domain === domain());
+  const site = () => ready(sites)?.find((s) => s.domain === domain());
 
   return (
     <div class="mx-auto flex max-w-3xl flex-col gap-6">
@@ -67,7 +68,7 @@ function TrackingCard(props: { domain: string; hasData: boolean }) {
         <CodeBlock code={trackingSnippet(props.domain)} />
         <div class="flex items-center gap-2 text-sm">
           <Show
-            when={props.hasData || (live.data?.visitors ?? 0) > 0}
+            when={props.hasData || (ready(live)?.visitors ?? 0) > 0}
             fallback={
               <>
                 <LoaderCircle class="size-4 animate-spin text-muted-foreground" />

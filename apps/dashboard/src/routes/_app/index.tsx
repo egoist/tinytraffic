@@ -9,6 +9,7 @@ import { Card } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
 import { api, type SiteWithStats } from "~/lib/api";
 import { formatFull, formatNumber } from "~/lib/format";
+import { ready } from "~/lib/query";
 
 export const Route = createFileRoute("/_app/")({
   component: Sites,
@@ -36,7 +37,7 @@ function Sites() {
             <For each={[1, 2, 3]}>{() => <Skeleton class="h-40 rounded-xl" />}</For>
           </div>
         </Match>
-        <Match when={sites.data?.length === 0}>
+        <Match when={ready(sites)?.length === 0}>
           <Card class="flex flex-col items-center px-6 py-16 text-center">
             <div class="grid size-12 place-items-center rounded-full bg-secondary">
               <Plus class="size-5 text-muted-foreground" />
@@ -50,7 +51,7 @@ function Sites() {
             </Button>
           </Card>
         </Match>
-        <Match when={sites.data}>
+        <Match when={ready(sites)}>
           {(list) => (
             <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <For each={list()}>{(site) => <SiteCard site={site} />}</For>

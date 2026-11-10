@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/solid-query";
 import { api } from "~/lib/api";
 import { formatNumber } from "~/lib/format";
+import { ready } from "~/lib/query";
 
 export function Realtime(props: { domain: string }) {
   const q = useQuery(() => ({
@@ -8,7 +9,7 @@ export function Realtime(props: { domain: string }) {
     queryFn: () => api.realtime(props.domain),
     refetchInterval: 15_000,
   }));
-  const n = () => q.data?.visitors ?? 0;
+  const n = () => ready(q)?.visitors ?? 0;
   return (
     <span class="inline-flex items-center gap-2 text-sm text-muted-foreground" title="Visitors in the last 5 minutes">
       <span class="relative flex size-2">
