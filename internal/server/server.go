@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"mime"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"slices"
@@ -512,6 +513,23 @@ func (s *Server) serveApp(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// Signed-out visitors get the sign-in page before any dashboard HTML, and
+	// signed-in visitors who open it are sent on.
+	signedIn := s.Auth.Valid(r)
+	if p == "login" {
+		if signedIn {
+			http.Redirect(w, r, nextPath(r.URL.Query().Get("redirect")), http.StatusFound)
+			return
+		}
+	} else if !signedIn {
+		target := "/login"
+		if r.URL.Path != "/" {
+			target += "?redirect=" + url.QueryEscape(r.URL.RequestURI())
+		}
+		http.Redirect(w, r, target, http.StatusFound)
+		return
+	}
+
 	shell, err := fs.ReadFile(s.Dist, "_shell.html")
 	if err != nil {
 		http.Error(w, "dashboard not built: run `bun run build`", http.StatusNotFound)
@@ -520,6 +538,14 @@ func (s *Server) serveApp(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Write(shell)
+}
+
+// nextPath returns next if it is a path on this site, otherwise "/".
+func nextPath(next string) string {
+	if strings.HasPrefix(next, "/") && !strings.HasPrefix(next, "//") && !strings.HasPrefix(next, "/\\") {
+		return next
+	}
+	return "/"
 }
 
 // --- helpers ---

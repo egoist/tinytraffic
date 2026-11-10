@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/solid-query";
-import { createFileRoute, redirect, useNavigate } from "@tanstack/solid-router";
+import { createFileRoute, useNavigate } from "@tanstack/solid-router";
 import { createSignal, Show } from "solid-js";
-import { isServer } from "solid-js/web";
 import { LanguageToggle } from "~/components/language-toggle";
 import { Logo } from "~/components/logo";
 import { Button } from "~/components/ui/button";
@@ -15,11 +14,6 @@ export const Route = createFileRoute("/login")({
   validateSearch: (s: Record<string, unknown>): { redirect?: string } => ({
     redirect: typeof s.redirect === "string" && s.redirect.startsWith("/") ? s.redirect : undefined,
   }),
-  beforeLoad: async ({ context, search }) => {
-    if (isServer) return;
-    const auth = await context.queryClient.fetchQuery({ queryKey: ["auth"], queryFn: api.auth });
-    if (auth.authenticated) throw redirect({ href: search.redirect ?? "/" });
-  },
   component: Login,
 });
 
