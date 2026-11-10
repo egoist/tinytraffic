@@ -1,4 +1,4 @@
-import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Show, untrack } from "solid-js";
 import type { Point } from "~/lib/api";
 import { formatBucket } from "~/lib/format";
 
@@ -12,6 +12,9 @@ export type ChartMetric = {
 
 const HEIGHT = 260;
 const M = { top: 14, right: 12, bottom: 28, left: 46 };
+/** How long the line takes to morph to a new metric or filter. */
+const MORPH_MS = 450;
+const easeOut = (t: number) => 1 - (1 - t) ** 3;
 
 /** Round a max up to a clean axis value and return evenly spaced ticks. */
 function niceTicks(max: number, count = 4) {
@@ -89,10 +92,9 @@ export function TrafficChart(props: {
     onCleanup(() => ro.disconnect());
   });
 
-  const geo = createMemo(() => {
+  // The vertical scale and where each point should end up.
+  const scale = createMemo(() => {
     const pts = props.points;
-    const w = width();
-    const innerW = Math.max(1, w - M.left - M.right);
     const innerH = HEIGHT - M.top - M.bottom;
     // Buckets that haven't started yet are not drawn as zeros.
     const now = nowIn(props.timezone);
@@ -100,9 +102,46 @@ export function TrafficChart(props: {
     const values = pts.slice(0, drawn).map(props.metric.value);
     const ticks = niceTicks(Math.max(0, ...values));
     const top = ticks[ticks.length - 1] || 1;
-    const x = (i: number) => M.left + (pts.length <= 1 ? innerW / 2 : (i / (pts.length - 1)) * innerW);
     const y = (v: number) => M.top + innerH - (v / top) * innerH;
-    const coords = values.map((v, i) => [x(i), y(v)] as [number, number]);
+    return { now, drawn, values, ticks, y, ys: values.map(y) };
+  });
+
+  // The y positions on screen, tweened toward scale().ys so switching metrics
+  // or filters morphs the line. A different number of points (a new period)
+  // has nothing to morph from, so it switches at once.
+  const [ys, setYs] = createSignal(untrack(() => scale().ys));
+  let raf = 0;
+  createEffect(
+    on(
+      () => scale().ys,
+      (to) => {
+        cancelAnimationFrame(raf);
+        const from = untrack(ys);
+        const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+        if (reduce || from.length !== to.length || from.length === 0) {
+          setYs(to);
+          return;
+        }
+        const start = performance.now();
+        const step = (t: number) => {
+          const k = easeOut(Math.min(1, (t - start) / MORPH_MS));
+          setYs(to.map((v, i) => from[i] + (v - from[i]) * k));
+          if (k < 1) raf = requestAnimationFrame(step);
+        };
+        raf = requestAnimationFrame(step);
+      },
+      { defer: true },
+    ),
+  );
+  onCleanup(() => cancelAnimationFrame(raf));
+
+  const geo = createMemo(() => {
+    const pts = props.points;
+    const w = width();
+    const innerW = Math.max(1, w - M.left - M.right);
+    const { now, drawn, values, ticks, y } = scale();
+    const x = (i: number) => M.left + (pts.length <= 1 ? innerW / 2 : (i / (pts.length - 1)) * innerW);
+    const coords = ys().map((v, i) => [x(i), v] as [number, number]);
     // The bucket containing "now" is still filling up: draw its segment
     // dashed so a partial day doesn't read as a drop.
     const partial = drawn > 1 && drawn <= pts.length && (drawn < pts.length || isOpenBucket(pts[drawn - 1].date, props.interval, now));
@@ -143,9 +182,13 @@ export function TrafficChart(props: {
       <svg width="100%" height={HEIGHT} role="img" aria-label={`${props.metric.label} over time`}>
         <For each={geo().ticks}>
           {(t) => (
-            <g>
-              <line x1={M.left} x2={width() - M.right} y1={geo().y(t)} y2={geo().y(t)} stroke="var(--chart-grid)" stroke-width="1" />
-              <text x={M.left - 10} y={geo().y(t)} dy="0.32em" text-anchor="end" class="fill-muted-foreground text-[11px] tabular">
+            // Ticks slide to their new height with the line; new ones fade in.
+            <g
+              class="animate-in fade-in transition-transform duration-[450ms] ease-[cubic-bezier(0.33,1,0.68,1)] motion-reduce:animate-none motion-reduce:transition-none"
+              style={{ transform: `translateY(${geo().y(t)}px)` }}
+            >
+              <line x1={M.left} x2={width() - M.right} y1={0} y2={0} stroke="var(--chart-grid)" stroke-width="1" />
+              <text x={M.left - 10} y={0} dy="0.32em" text-anchor="end" class="fill-muted-foreground text-[11px] tabular">
                 {props.metric.format(t)}
               </text>
             </g>

@@ -1,5 +1,5 @@
 import { ArrowDownRight, ArrowUpRight } from "lucide-solid";
-import { For, Show } from "solid-js";
+import { createEffect, createSignal, For, on, onCleanup, onMount, Show } from "solid-js";
 import type { Metrics } from "~/lib/api";
 import { change, formatDuration, formatFull, formatNumber, formatPercent } from "~/lib/format";
 import { cn } from "~/lib/utils";
@@ -28,8 +28,40 @@ export function MetricTiles(props: {
   selected: MetricKey;
   onSelect: (k: MetricKey) => void;
 }) {
+  // One raised highlight that slides to the selected tile. The grid wraps at
+  // smaller widths, so it follows the tile in both directions.
+  let grid!: HTMLDivElement;
+  const tiles: Partial<Record<MetricKey, HTMLButtonElement>> = {};
+  const [box, setBox] = createSignal<{ x: number; y: number; w: number; h: number }>();
+  const [animate, setAnimate] = createSignal(false);
+  const measure = () => {
+    const el = tiles[props.selected];
+    if (el) setBox({ x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight });
+  };
+  onMount(() => {
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(grid);
+    onCleanup(() => ro.disconnect());
+    // Place it without a transition first, then animate later moves.
+    requestAnimationFrame(() => setAnimate(true));
+  });
+  createEffect(on(() => props.selected, measure, { defer: true }));
+
   return (
-    <div class="grid grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-6">
+    <div ref={grid} class="relative grid grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-6">
+      <Show when={box()}>
+        {(b) => (
+          <span
+            aria-hidden="true"
+            class={cn(
+              "pointer-events-none absolute top-0 left-0 rounded-lg bg-card shadow-sm ring ring-line",
+              animate() && "transition-[transform,width,height] duration-300 ease-[cubic-bezier(0.25,1,0.5,1)]",
+            )}
+            style={{ transform: `translate(${b().x}px, ${b().y}px)`, width: `${b().w}px`, height: `${b().h}px` }}
+          />
+        )}
+      </Show>
       <For each={metricDefs}>
         {(m) => {
           const value = () => props.current?.[m.key];
@@ -37,12 +69,13 @@ export function MetricTiles(props: {
           const selected = () => props.selected === m.key;
           return (
             <button
+              ref={(el) => (tiles[m.key] = el)}
               type="button"
               onClick={() => props.onSelect(m.key)}
               aria-pressed={selected()}
               class={cn(
-                "group relative cursor-pointer rounded-lg px-3.5 py-3 text-left outline-none transition-[background-color,box-shadow] hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring",
-                selected() && "bg-card shadow-sm ring ring-line hover:bg-card",
+                "group relative cursor-pointer rounded-lg px-3.5 py-3 text-left outline-none transition-[background-color,box-shadow] focus-visible:ring-2 focus-visible:ring-ring",
+                !selected() && "hover:bg-accent",
               )}
             >
               <div class="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
