@@ -81,7 +81,7 @@ export function MetricTiles(props: {
             >
               <div class="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                 <span
-                  class={cn("size-1.5 rounded-full bg-chart-1 transition-opacity", selected() ? "opacity-100" : "opacity-0")}
+                  class={cn("size-1.5 rounded-full transition-colors", selected() ? "bg-chart-1" : "bg-muted-foreground/40")}
                   aria-hidden="true"
                 />
                 {t().metrics[m.key]}
