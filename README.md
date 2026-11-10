@@ -27,6 +27,12 @@ docker run -d --name tinytraffic -p 8080:8080 -v tinytraffic:/data \
   -e TT_PASSWORD=change-me ghcr.io/egoist/tinytraffic:main
 ```
 
+Behind a reverse proxy (Traefik, Caddy, nginx or Dokploy), add
+`-e TT_TRUST_PROXY=true` and drop `-p 8080:8080`, so the proxy is the only way
+in. Visitors are then located by their real IP. Without the flag, every visitor
+appears to come from the proxy and shows as "Unknown". In Dokploy, add
+`TT_TRUST_PROXY=true` under the app's Environment tab.
+
 Or from source. You need [Go](https://go.dev) 1.26+, [Bun](https://bun.sh)
 1.4+ and a C compiler (DuckDB is a C++ library, so the Go build uses cgo):
 
