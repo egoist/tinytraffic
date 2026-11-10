@@ -113,11 +113,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now().UTC()
 	ip := ClientIP(r, h.TrustProxy || (h.TrustRequest != nil && h.TrustRequest(r)))
-	cur, prev, err := h.Salts.Get(now)
-	if err != nil {
-		h.Log.Error("load salt", "err", err)
-		return
-	}
 
 	hostname := strings.TrimPrefix(strings.ToLower(pageURL.Hostname()), "www.")
 	pathname := pageURL.Path
@@ -171,6 +166,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		seen[site.ID] = true
+		cur, prev, err := h.Salts.Get(now, site.Timezone)
+		if err != nil {
+			h.Log.Error("load salt", "err", err)
+			return
+		}
 		e := base
 		e.SiteID = site.ID
 		visitor := visitorHash(cur, site.ID, ip, ua)

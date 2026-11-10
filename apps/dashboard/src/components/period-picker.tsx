@@ -3,6 +3,7 @@ import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { periods, type Period } from "~/lib/dims";
 import { parseBucket } from "~/lib/format";
 import { intlLocale, t } from "~/lib/i18n";
+import { nowIn } from "~/lib/timezones";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog";
 import {
@@ -27,7 +28,8 @@ export function periodLabel(v: PeriodValue) {
   return t().periods[v.period === "custom" ? "30d" : v.period];
 }
 
-export function PeriodPicker(props: { value: PeriodValue; onChange: (v: PeriodValue) => void }) {
+/** `timezone` is the site's, so the custom range's "today" is the site's today. */
+export function PeriodPicker(props: { value: PeriodValue; timezone?: string; onChange: (v: PeriodValue) => void }) {
   const [customOpen, setCustomOpen] = createSignal(false);
 
   // Single-key shortcuts, as shown in the menu.
@@ -82,6 +84,7 @@ export function PeriodPicker(props: { value: PeriodValue; onChange: (v: PeriodVa
       <Show when={customOpen()}>
         <CustomRangeDialog
           initial={props.value}
+          timezone={props.timezone}
           onClose={() => setCustomOpen(false)}
           onApply={(from, to) => {
             setCustomOpen(false);
@@ -93,8 +96,13 @@ export function PeriodPicker(props: { value: PeriodValue; onChange: (v: PeriodVa
   );
 }
 
-function CustomRangeDialog(props: { initial: PeriodValue; onClose: () => void; onApply: (from: string, to: string) => void }) {
-  const today = new Date().toLocaleDateString("en-CA");
+function CustomRangeDialog(props: {
+  initial: PeriodValue;
+  timezone?: string;
+  onClose: () => void;
+  onApply: (from: string, to: string) => void;
+}) {
+  const today = props.timezone ? nowIn(props.timezone).slice(0, 10) : new Date().toLocaleDateString("en-CA");
   const [from, setFrom] = createSignal(props.initial.from ?? today);
   const [to, setTo] = createSignal(props.initial.to ?? today);
   const valid = () => from() && to() && from() <= to();

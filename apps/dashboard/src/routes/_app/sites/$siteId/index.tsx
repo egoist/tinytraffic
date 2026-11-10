@@ -108,7 +108,11 @@ function Dashboard() {
             <Earth class="text-muted-foreground" /> {t().dashboard.liveView}
           </Link>
         </div>
-        <PeriodPicker value={{ period: stats().period as Period, from: stats().from, to: stats().to }} onChange={setPeriod} />
+        <PeriodPicker
+          value={{ period: stats().period as Period, from: stats().from, to: stats().to }}
+          timezone={aggregate.data?.query.timezone}
+          onChange={setPeriod}
+        />
       </div>
 
       <FilterBar

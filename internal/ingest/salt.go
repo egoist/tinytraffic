@@ -14,51 +14,69 @@ type SaltStore interface {
 	DeleteSaltsBefore(day string) error
 }
 
-// Salts holds the daily rotating salt used to hash visitor IDs. Only
-// yesterday's, today's and tomorrow's salts exist at any time, so a visitor
-// hash can never be linked across more than two days.
+// Salts holds the daily rotating salts used to hash visitor IDs. A site's
+// salt changes at midnight in the site's timezone, so a visitor keeps one ID
+// for the whole day the dashboard shows, and a visitor hash can never be
+// linked across more than two of the site's days.
 //
-// Tomorrow's salt is made a day ahead, so at midnight it already exists and
-// processes sharing the database (e.g. during a rolling deploy) don't each
-// make their own.
+// Local days are at most a day behind or ahead of UTC, so the salts of
+// yesterday, today and tomorrow (UTC) cover every timezone. The salt of the
+// day after tomorrow is made a day ahead, so at UTC midnight tomorrow's
+// already exists and processes sharing the database (e.g. during a rolling
+// deploy) don't each make their own. Older salts are deleted: by UTC
+// midnight, the last timezone left that day over 12 hours ago.
 type Salts struct {
 	store SaltStore
 
-	mu       sync.Mutex
-	day      string
-	current  []byte
-	previous []byte
+	mu    sync.Mutex
+	day   string            // UTC day the salts were loaded for
+	salts map[string][]byte // by day
+	locs  map[string]*time.Location
 }
 
-func NewSalts(store SaltStore) *Salts { return &Salts{store: store} }
+func NewSalts(store SaltStore) *Salts {
+	return &Salts{store: store, locs: map[string]*time.Location{}}
+}
 
-// Get returns today's salt and yesterday's (nil if there was none).
-func (s *Salts) Get(now time.Time) (current, previous []byte, err error) {
-	day := now.UTC().Format(time.DateOnly)
+// Get returns the salts of today and yesterday in timezone tz (previous is
+// nil if there was none). Unknown timezones use UTC.
+func (s *Salts) Get(now time.Time, tz string) (current, previous []byte, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if day == s.day {
-		return s.current, s.previous, nil
+	utc := now.UTC()
+	if day := utc.Format(time.DateOnly); day != s.day {
+		salts := map[string][]byte{}
+		for i := -1; i <= 2; i++ {
+			d := utc.AddDate(0, 0, i).Format(time.DateOnly)
+			salt, err := s.ensure(d)
+			if err != nil {
+				return nil, nil, err
+			}
+			salts[d] = salt
+		}
+		if err := s.store.DeleteSaltsBefore(utc.AddDate(0, 0, -1).Format(time.DateOnly)); err != nil {
+			return nil, nil, err
+		}
+		s.day, s.salts = day, salts
 	}
-	yesterday := now.UTC().AddDate(0, 0, -1).Format(time.DateOnly)
-	tomorrow := now.UTC().AddDate(0, 0, 1).Format(time.DateOnly)
-
-	cur, err := s.ensure(day)
-	if err != nil {
-		return nil, nil, err
-	}
-	if _, err := s.ensure(tomorrow); err != nil {
-		return nil, nil, err
-	}
-	prev, err := s.store.Salt(yesterday)
-	if err != nil {
-		return nil, nil, err
-	}
-	if err := s.store.DeleteSaltsBefore(yesterday); err != nil {
-		return nil, nil, err
-	}
-	s.day, s.current, s.previous = day, cur, prev
+	local := now.In(s.location(tz))
+	cur := s.salts[local.Format(time.DateOnly)]
+	prev := s.salts[local.AddDate(0, 0, -1).Format(time.DateOnly)]
 	return cur, prev, nil
+}
+
+// location returns the time.Location of tz, cached since loading one reads
+// the timezone database.
+func (s *Salts) location(tz string) *time.Location {
+	if loc, ok := s.locs[tz]; ok {
+		return loc
+	}
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		loc = time.UTC
+	}
+	s.locs[tz] = loc
+	return loc
 }
 
 // ensure returns a day's salt, making it if there is none.

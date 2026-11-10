@@ -2,6 +2,7 @@ import { createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Sh
 import type { Point } from "~/lib/api";
 import { formatBucket } from "~/lib/format";
 import { t } from "~/lib/i18n";
+import { nowIn } from "~/lib/timezones";
 import { cn } from "~/lib/utils";
 
 export type ChartMetric = {
@@ -54,22 +55,6 @@ function monotonePath(pts: [number, number][]) {
     d += `C${(x0 + h).toFixed(1)},${(y0 + h * t[i]).toFixed(1)} ${(x1 - h).toFixed(1)},${(y1 - h * t[i + 1]).toFixed(1)} ${x1.toFixed(1)},${y1.toFixed(1)}`;
   }
   return d;
-}
-
-/** Current wall-clock time in a timezone, formatted like bucket labels. */
-function nowIn(tz: string) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: tz,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(new Date());
-  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "00";
-  return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}:${get("second")}`;
 }
 
 /** Whether the bucket starting at `date` hasn't ended yet at `now`. */

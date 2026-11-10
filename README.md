@@ -7,8 +7,8 @@ DuckDB file, no cookies.
   link clicks and custom events. Accepts Plausible's event format, so existing
   Plausible integrations work.
 - **Privacy**: no cookies or storage. Visitors are identified by
-  `hash(daily salt, site, IP, user agent)`. The salt rotates every day, and the
-  IP is never stored. Referrers keep their domain and path; query strings are
+  `hash(daily salt, site, IP, user agent)`. The salt rotates at midnight in the
+  site's timezone, and the IP is never stored. Referrers keep their domain and path; query strings are
   dropped.
 - **Dashboard**: visitors, visits, pageviews, bounce rate and visit duration
   over time, plus sources, referrers, pages, locations, devices and goals.
