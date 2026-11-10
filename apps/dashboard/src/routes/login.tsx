@@ -28,15 +28,20 @@ function Login() {
   const navigate = useNavigate();
   const search = Route.useSearch();
   const auth = useQuery(() => ({ queryKey: ["auth"], queryFn: api.auth }));
-  const setup = () => ready(auth)?.needs_setup ?? false;
   const [password, setPassword] = createSignal("");
   const [confirm, setConfirm] = createSignal("");
+  // Once the password is created the auth refetch reports needs_setup: false,
+  // which would flash the sign-in form until we navigate away. Stay in setup mode.
+  const [created, setCreated] = createSignal(false);
+  const setup = () => created() || (ready(auth)?.needs_setup ?? false);
 
   const submit = useMutation(() => ({
     mutationFn: async () => {
       if (setup()) {
         if (password() !== confirm()) throw new Error(t().login.mismatch);
-        return api.setup(password());
+        await api.setup(password());
+        setCreated(true);
+        return;
       }
       return api.login(password());
     },
@@ -93,7 +98,7 @@ function Login() {
             <Show when={submit.error}>
               <p class="text-sm text-destructive">{errorMessage(submit.error)}</p>
             </Show>
-            <Button type="submit" class="mt-1 w-full" disabled={!password() || submit.isPending || auth.isPending}>
+            <Button type="submit" class="mt-1 w-full" disabled={!password() || submit.isPending || submit.isSuccess || auth.isPending}>
               {submit.isPending ? t().login.pending : setup() ? t().login.create : t().login.signIn}
             </Button>
           </form>
