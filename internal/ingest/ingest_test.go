@@ -43,7 +43,7 @@ func TestHandler(t *testing.T) {
 	site, _ := st.CreateSite("example.com", "UTC")
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	w := store.NewWriter(st.Events, log)
-	h := NewHandler(Handler{Store: st, Writer: w, Salts: NewSalts(st.DB), Log: log})
+	h := NewHandler(Handler{Store: st, Writer: w, Salts: NewSalts(st), Log: log})
 
 	send := func(ua, body string) int {
 		req := httptest.NewRequest(http.MethodPost, "/api/event", strings.NewReader(body))
@@ -109,7 +109,7 @@ func TestTrustRequestForwardedIP(t *testing.T) {
 		site, _ := st.CreateSite("example.com", "UTC")
 		log := slog.New(slog.NewTextHandler(io.Discard, nil))
 		w := store.NewWriter(st.Events, log)
-		h := NewHandler(Handler{Store: st, Writer: w, Salts: NewSalts(st.DB), Log: log,
+		h := NewHandler(Handler{Store: st, Writer: w, Salts: NewSalts(st), Log: log,
 			TrustRequest: func(*http.Request) bool { return trusted }})
 		for _, ip := range []string{"198.51.100.1", "198.51.100.2"} {
 			req := httptest.NewRequest(http.MethodPost, "/api/event", strings.NewReader(`{"n":"pageview","u":"https://example.com/","d":"example.com"}`))
@@ -146,7 +146,7 @@ func TestRenamedSite(t *testing.T) {
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	w := store.NewWriter(st.Events, log)
-	h := NewHandler(Handler{Store: st, Writer: w, Salts: NewSalts(st.DB), Log: log})
+	h := NewHandler(Handler{Store: st, Writer: w, Salts: NewSalts(st), Log: log})
 	for _, d := range []string{"old.com", "new.com", "old.com,new.com"} {
 		req := httptest.NewRequest(http.MethodPost, "/api/event", strings.NewReader(`{"n":"pageview","u":"https://new.com/","d":"`+d+`"}`))
 		req.Header.Set("User-Agent", chromeUA)

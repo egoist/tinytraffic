@@ -27,9 +27,12 @@ const usage = `tinytraffic — simple, privacy-friendly web analytics
 
 Usage:
   tinytraffic [serve] [flags]        start the server
-  tinytraffic seed [flags] DOMAIN    add demo traffic for DOMAIN (server must be stopped)
-  tinytraffic password [flags]       set the dashboard password (server must be stopped)
-  tinytraffic migrate-clickhouse     copy events from DuckDB to ClickHouse (server must be stopped)
+  tinytraffic seed [flags] DOMAIN    add demo traffic for DOMAIN
+  tinytraffic password [flags]       set the dashboard password
+  tinytraffic migrate-clickhouse     copy everything from DuckDB to ClickHouse
+
+With DuckDB, stop the server before running a command: only one process can
+open the database file.
 
 Run "tinytraffic <command> -h" for flags. Flags can also be set with
 environment variables: TT_ADDR, TT_DATA_DIR, TT_GEOIP_DB, TT_TRUST_PROXY,
@@ -76,10 +79,13 @@ func dataDirFlag(fs *flag.FlagSet) *string {
 }
 
 func clickHouseFlag(fs *flag.FlagSet) *string {
-	return fs.String("clickhouse", env("TT_CLICKHOUSE_URL", ""), "store events in ClickHouse, e.g. clickhouse://user:password@host:9000/tinytraffic")
+	return fs.String("clickhouse", env("TT_CLICKHOUSE_URL", ""), "use ClickHouse instead of DuckDB, e.g. clickhouse://user:password@host:9000/tinytraffic")
 }
 
 func openStoreWith(dataDir string, opts store.Options) (*store.Store, error) {
+	if opts.ClickHouseURL != "" {
+		return store.Open("", opts)
+	}
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		return nil, err
 	}
@@ -107,7 +113,7 @@ func serve(args []string) error {
 	}
 	defer st.Close()
 	if st.Events.Backend == store.ClickHouse {
-		log.Info("events stored in clickhouse")
+		log.Info("using clickhouse")
 	}
 
 	auth, err := server.NewAuth(st)
@@ -140,7 +146,7 @@ func serve(args []string) error {
 		Store: st,
 		Auth:  auth,
 		Ingest: ingest.NewHandler(ingest.Handler{
-			Store: st, Writer: writer, Salts: ingest.NewSalts(st.DB),
+			Store: st, Writer: writer, Salts: ingest.NewSalts(st),
 			Geo: geo, TrustProxy: *trustProxy, Log: log,
 			TrustRequest: server.TrustedEventSender(st),
 		}),
@@ -163,7 +169,11 @@ func serve(args []string) error {
 	defer stop()
 	errc := make(chan error, 1)
 	go func() {
-		log.Info("listening", "addr", *addr, "data", *dataDir)
+		if st.DB != nil {
+			log.Info("listening", "addr", *addr, "data", *dataDir)
+		} else {
+			log.Info("listening", "addr", *addr)
+		}
 		errc <- httpServer.ListenAndServe()
 	}()
 	select {
@@ -223,9 +233,9 @@ func seedCmd(args []string) error {
 func passwordCmd(args []string) error {
 	fs := flag.NewFlagSet("password", flag.ExitOnError)
 	dataDir := dataDirFlag(fs)
+	clickHouse := clickHouseFlag(fs)
 	fs.Parse(args)
-	// Passwords live in DuckDB, so ClickHouse isn't needed here.
-	st, err := openStoreWith(*dataDir, store.Options{MemoryLimit: os.Getenv("TT_MEMORY_LIMIT")})
+	st, err := openStoreWith(*dataDir, store.Options{MemoryLimit: os.Getenv("TT_MEMORY_LIMIT"), ClickHouseURL: *clickHouse})
 	if err != nil {
 		return err
 	}
@@ -243,6 +253,9 @@ func passwordCmd(args []string) error {
 		return err
 	}
 	fmt.Println("Password updated. Existing sessions are signed out.")
+	if st.Events.Backend == store.ClickHouse {
+		fmt.Println("A server that is running keeps the old password until it restarts.")
+	}
 	return nil
 }
 
@@ -254,15 +267,20 @@ func migrateClickHouseCmd(args []string) error {
 	if *clickHouse == "" {
 		return errors.New("set -clickhouse or TT_CLICKHOUSE_URL")
 	}
-	st, err := openStoreWith(*dataDir, store.Options{MemoryLimit: os.Getenv("TT_MEMORY_LIMIT"), ClickHouseURL: *clickHouse})
+	from, err := openStoreWith(*dataDir, store.Options{MemoryLimit: os.Getenv("TT_MEMORY_LIMIT")})
 	if err != nil {
 		return err
 	}
-	defer st.Close()
+	defer from.Close()
+	to, err := openStoreWith("", store.Options{ClickHouseURL: *clickHouse})
+	if err != nil {
+		return err
+	}
+	defer to.Close()
 	start := time.Now()
-	total, err := st.MigrateToClickHouse(context.Background(), func(p store.MigrateProgress) {
+	total, err := store.MigrateToClickHouse(context.Background(), from, to, func(p store.MigrateProgress) {
 		name := strconv.Itoa(int(p.SiteID))
-		if site, ok := st.SiteByID(p.SiteID); ok {
+		if site, ok := from.SiteByID(p.SiteID); ok {
 			name = site.Domain
 		}
 		if p.Done {
@@ -274,7 +292,7 @@ func migrateClickHouseCmd(args []string) error {
 	if err != nil {
 		return fmt.Errorf("%w\n(%d events were copied; run the command again to continue)", err, total)
 	}
-	fmt.Printf("copied %d events in %s. The events also stay in DuckDB.\n", total, time.Since(start).Round(time.Millisecond))
+	fmt.Printf("copied sites, settings and %d events in %s. Nothing was removed from DuckDB.\n", total, time.Since(start).Round(time.Millisecond))
 	return nil
 }
 

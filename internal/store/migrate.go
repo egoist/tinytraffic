@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
@@ -21,23 +22,30 @@ type MigrateProgress struct {
 // migrateBatch is the most events per insert (a variable for tests).
 var migrateBatch = 50_000
 
-// MigrateToClickHouse copies the events in DuckDB to ClickHouse. The store
-// must have been opened with a ClickHouse URL.
+// MigrateToClickHouse copies a DuckDB store to a ClickHouse one: sites and
+// their aliases, API keys, settings (such as the password), salts and events.
 //
-// For each site it copies only events older than the site's earliest event
-// in ClickHouse, so it can run after the server already started writing to
-// ClickHouse, and running it again copies nothing twice. Events are copied
+// It is safe to run again. Sites, keys, settings and salts already in
+// ClickHouse are kept; it fails if a site or key ID means something else
+// there. For each site it copies only events older than the site's earliest
+// event in ClickHouse, so it can run after the server already started
+// writing to ClickHouse, and nothing is copied twice. Events are copied
 // newest first, a month at a time, and each insert stays within one month
 // (one ClickHouse partition) so it lands whole or not at all: if the copy is
 // interrupted, running it again resumes where it stopped.
 //
-// The events stay in DuckDB.
-func (s *Store) MigrateToClickHouse(ctx context.Context, progress func(MigrateProgress)) (int64, error) {
-	if s.Events.Backend != ClickHouse {
-		return 0, errors.New("clickhouse is not configured")
+// Nothing is removed from DuckDB.
+func MigrateToClickHouse(ctx context.Context, from, to *Store, progress func(MigrateProgress)) (int64, error) {
+	duck, ok := from.meta.(*duckMeta)
+	ch, ok2 := to.meta.(*clickhouseMeta)
+	if !ok || !ok2 {
+		return 0, errors.New("migrate: need a DuckDB store and a ClickHouse store")
 	}
-	duck := &Events{DB: s.DB, Backend: DuckDB}
-	rows, err := s.DB.QueryContext(ctx, `SELECT site_id, min(ts), max(ts) FROM events GROUP BY 1 ORDER BY 1`)
+	if err := copyMeta(from, duck, to, ch); err != nil {
+		return 0, err
+	}
+
+	rows, err := from.DB.QueryContext(ctx, `SELECT site_id, min(ts), max(ts) FROM events GROUP BY 1 ORDER BY 1`)
 	if err != nil {
 		return 0, err
 	}
@@ -63,7 +71,7 @@ func (s *Store) MigrateToClickHouse(ctx context.Context, progress func(MigratePr
 	for _, site := range sites {
 		// Copy everything before the first event already in ClickHouse.
 		var cutoff sql.NullTime
-		if err := s.Events.QueryRowContext(ctx,
+		if err := to.Events.QueryRowContext(ctx,
 			`SELECT minOrNull(ts) FROM events WHERE site_id = ?`, site.id).Scan(&cutoff); err != nil {
 			return total, err
 		}
@@ -76,7 +84,7 @@ func (s *Store) MigrateToClickHouse(ctx context.Context, progress func(MigratePr
 		// is at most end-1µs; copy its month, then the month before.
 		for site.first.Before(end) {
 			month := monthStart(end.Add(-time.Microsecond))
-			n, err := copyRange(ctx, duck, s.Events, site.id, month, end)
+			n, err := copyRange(ctx, from.Events, to.Events, site.id, month, end)
 			copied += n
 			total += n
 			if err != nil {
@@ -92,6 +100,90 @@ func (s *Store) MigrateToClickHouse(ctx context.Context, progress func(MigratePr
 		}
 	}
 	return total, nil
+}
+
+// copyMeta copies sites, aliases, API keys, settings and salts that
+// ClickHouse doesn't have yet.
+func copyMeta(from *Store, duck *duckMeta, to *Store, ch *clickhouseMeta) error {
+	settings, err := duck.settings()
+	if err != nil {
+		return err
+	}
+	for k, v := range settings {
+		if have, err := ch.setting(k); err != nil {
+			return err
+		} else if have == "" {
+			if err := ch.setSetting(k, v); err != nil {
+				return err
+			}
+		}
+	}
+
+	sites := from.Sites()
+	slices.SortFunc(sites, func(a, b Site) int { return int(a.ID - b.ID) })
+	for _, site := range sites {
+		if have, ok := to.SiteByID(site.ID); ok {
+			if have.Domain != site.Domain {
+				return fmt.Errorf("site %d is %s in DuckDB but %s in ClickHouse", site.ID, site.Domain, have.Domain)
+			}
+		} else if other, ok := to.SiteByDomain(site.Domain); ok {
+			return fmt.Errorf("%s is site %d in DuckDB but site %d in ClickHouse", site.Domain, site.ID, other.ID)
+		} else if err := ch.putSite(site, false); err != nil {
+			return err
+		}
+		for _, a := range site.Aliases {
+			if _, ok := to.SiteByDomain(a); !ok {
+				if err := ch.putAlias(a, site.ID, false); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	from.keysMu.RLock()
+	keys := make([]APIKey, 0, len(from.keys))
+	for _, k := range from.keys {
+		keys = append(keys, *k)
+	}
+	from.keysMu.RUnlock()
+	have := map[int32]string{}
+	to.keysMu.RLock()
+	for h, k := range to.keys {
+		have[k.ID] = h
+	}
+	to.keysMu.RUnlock()
+	for _, k := range keys {
+		if h, ok := have[k.ID]; ok {
+			if h != k.hash {
+				return fmt.Errorf("API key %d (%s) is a different key in ClickHouse", k.ID, k.Name)
+			}
+			continue
+		}
+		if err := ch.putAPIKey(&k, false); err != nil {
+			return err
+		}
+		if k.LastUsedAt != nil {
+			if err := ch.touchAPIKey(k.ID, *k.LastUsedAt); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Today's salt keeps visitors counted once across the switch.
+	salts, err := duck.salts()
+	if err != nil {
+		return err
+	}
+	for day, salt := range salts {
+		if have, err := ch.salt(day); err != nil {
+			return err
+		} else if have == nil {
+			if _, err := ch.addSalt(day, salt); err != nil {
+				return err
+			}
+		}
+	}
+	return to.reload()
 }
 
 func monthStart(t time.Time) time.Time {
