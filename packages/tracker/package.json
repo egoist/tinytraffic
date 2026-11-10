@@ -1,0 +1,12 @@
+{
+  "name": "tracker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun build src/script.ts --minify --target browser --format iife --outfile ../../web/static/script.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0"
+  }
+}

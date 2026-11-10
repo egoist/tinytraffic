@@ -1,0 +1,16 @@
+{
+  "name": "tinytraffic",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun scripts/dev.ts",
+    "demo": "bun scripts/demo.ts",
+    "build": "bun run --filter tracker build && bun run --filter dashboard build && go build -o bin/tinytraffic ./cmd/tinytraffic",
+    "test": "go test ./...",
+    "typecheck": "bun run --filter '*' typecheck"
+  }
+}

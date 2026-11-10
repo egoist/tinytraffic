@@ -1,0 +1,14 @@
+node_modules/
+bin/
+data/
+*.duckdb
+*.duckdb.wal
+web/dist/*
+!web/dist/.keep
+web/static/*
+!web/static/.keep
+apps/dashboard/dist/
+apps/dashboard/.tanstack/
+apps/dashboard/.output/
+apps/dashboard/src/routeTree.gen.ts
+.DS_Store

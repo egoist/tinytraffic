@@ -1,0 +1,10 @@
+.git
+**/node_modules
+**/dist
+!web/dist/.keep
+bin
+data
+*.duckdb
+*.duckdb.wal
+web/static/*.js
+.DS_Store
