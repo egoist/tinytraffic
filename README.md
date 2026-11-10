@@ -120,6 +120,10 @@ e.g. `CREATE DATABASE tinytraffic`; tinytraffic creates its tables in it on
 start. With ClickHouse, the data directory and `-memory-limit` aren't used,
 except to find `geo.mmdb`.
 
+tinytraffic expects a single ClickHouse server, not a cluster: its tables are
+plain `MergeTree` tables created without `ON CLUSTER`, so they aren't
+replicated or sharded.
+
 To move an existing install over, stop the server, copy everything, then
 start it with the URL:
 
