@@ -4,7 +4,7 @@ import { ArrowLeft, CircleCheck, LoaderCircle } from "lucide-solid";
 import { createEffect, createSignal, For, Show } from "solid-js";
 import { CodeBlock, trackingSnippet } from "~/components/code-block";
 import { Button } from "~/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, Surface } from "~/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { Input, Label, NativeSelect } from "~/components/ui/input";
 import { api, type Site } from "~/lib/api";
@@ -37,22 +37,22 @@ function Settings() {
       </div>
 
       <Show when={ready(sites) && !site()}>
-        <Card class="p-10 text-center">
+        <Surface class="p-10 text-center">
           <p class="font-medium">This site doesn't exist.</p>
           <Link to="/" class="mt-2 inline-block text-sm text-muted-foreground underline underline-offset-4">
             Back to all sites
           </Link>
-        </Card>
+        </Surface>
       </Show>
 
       <Show when={site()}>
         {(s) => (
           <>
             <Show when={search().welcome}>
-              <Card class="border-chart-1/30 bg-chart-wash p-5">
+              <Surface class="bg-chart-wash p-5 shadow-none ring-chart-1/30">
                 <p class="font-medium">{s().domain} is ready.</p>
                 <p class="mt-1 text-sm text-muted-foreground">Paste the snippet below into your site's &lt;head&gt; and you're done.</p>
-              </Card>
+              </Surface>
             </Show>
 
             <TrackingCard siteId={siteId()} domain={s().domain} hasData={s().visitors_24h > 0} />
@@ -101,7 +101,7 @@ function TrackingCard(props: { siteId: string; domain: string; hasData: boolean 
           </p>
           <CodeBlock code={`tinytraffic("Signup", { props: { plan: "pro" } })`} />
           <p class="text-xs text-muted-foreground">
-            Exclude your own visits by running <code class="rounded bg-muted px-1 py-0.5">localStorage.tinytraffic_ignore = "true"</code> in your browser console on your site.
+            Exclude your own visits by running <code class="rounded bg-recessed px-1 py-0.5 ring ring-border">localStorage.tinytraffic_ignore = "true"</code> in your browser console on your site.
           </p>
         </div>
       </CardContent>
@@ -238,7 +238,7 @@ function DangerCard(props: { siteId: string; domain: string }) {
     },
   }));
   return (
-    <Card class="border-destructive/30">
+    <Card class="ring-destructive/25">
       <CardHeader>
         <CardTitle>Delete site</CardTitle>
         <CardDescription>Removes the site and all of its stats. This can't be undone.</CardDescription>

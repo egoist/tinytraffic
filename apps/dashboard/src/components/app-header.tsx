@@ -38,7 +38,7 @@ export function AppHeader() {
   return (
     <header class="sticky top-0 z-40 border-b bg-background/80 backdrop-blur-md">
       <div class="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 sm:px-6">
-        <Link to="/" class="rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/50" aria-label="All sites">
+        <Link to="/" class="rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="All sites">
           <Show when={siteId()} fallback={<Logo />}>
             <LogoMark />
           </Show>
@@ -92,7 +92,7 @@ export function AppHeader() {
           <DropdownMenu placement="bottom-end">
             <DropdownMenuTrigger
               as="button"
-              class="ml-1 grid size-8 cursor-pointer place-items-center rounded-full bg-secondary text-xs font-semibold outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50"
+              class="ml-1 grid size-8 cursor-pointer place-items-center rounded-full bg-card text-xs font-semibold shadow-xs ring ring-line outline-none hover:bg-accent active:bg-recessed active:shadow-none focus-visible:ring-2 focus-visible:ring-ring data-[expanded]:bg-accent"
               aria-label="Account"
             >
               <KeyRound class="size-3.5 text-muted-foreground" />

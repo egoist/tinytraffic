@@ -72,8 +72,8 @@ function APIKeys() {
       </div>
 
       <Card>
-        <div class="flex items-start justify-between gap-4 p-5">
-          <div class="grid gap-1.5">
+        <div class="flex items-center justify-between gap-4 py-2.5 pr-2.5 pl-5">
+          <div class="grid gap-1">
             <CardTitle>Keys</CardTitle>
             <CardDescription>Revoke a key to cut off the app using it.</CardDescription>
           </div>
@@ -215,8 +215,8 @@ function CreateKeyDialog(props: { onClose: () => void }) {
                     {(s) => (
                       <label
                         class={cn(
-                          "flex cursor-pointer gap-3 rounded-lg border p-3 transition-colors hover:bg-accent/50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring/50",
-                          scope() === s.value && "border-foreground/30 bg-accent/40",
+                          "flex cursor-pointer gap-3 rounded-lg bg-recessed p-3 ring ring-border transition-[background-color,box-shadow] hover:bg-accent has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring",
+                          scope() === s.value && "bg-card shadow-sm ring-line hover:bg-card",
                         )}
                       >
                         <input
@@ -225,7 +225,7 @@ function CreateKeyDialog(props: { onClose: () => void }) {
                           value={s.value}
                           checked={scope() === s.value}
                           onChange={() => setScope(s.value)}
-                          class="mt-0.5 accent-foreground"
+                          class="mt-0.5 accent-primary"
                         />
                         <span class="grid gap-0.5">
                           <span class="text-sm font-medium">{s.label}</span>

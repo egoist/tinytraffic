@@ -7,7 +7,7 @@ import { metricDefs, MetricTiles, type MetricKey } from "~/components/metric-til
 import { PeriodPicker, type PeriodValue } from "~/components/period-picker";
 import { Realtime } from "~/components/realtime";
 import { TrafficChart } from "~/components/traffic-chart";
-import { Card } from "~/components/ui/card";
+import { Card, CardContent, Surface } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
 import { api, type StatsParams } from "~/lib/api";
 import { periodValues, type Period } from "~/lib/dims";
@@ -93,16 +93,16 @@ function Dashboard() {
       />
 
       <Show when={aggregate.error?.message === "site not found"}>
-        <Card class="p-10 text-center">
+        <Surface class="p-10 text-center">
           <p class="font-medium">This site doesn't exist.</p>
           <Link to="/" class="mt-2 inline-block text-sm text-muted-foreground underline underline-offset-4">
             Back to all sites
           </Link>
-        </Card>
+        </Surface>
       </Show>
 
-      <Card class="overflow-hidden">
-        <div class="border-b">
+      <Card>
+        <div class="p-1.5">
           <MetricTiles
             current={ready(aggregate)?.current}
             previous={ready(aggregate)?.previous}
@@ -110,7 +110,7 @@ function Dashboard() {
             onSelect={(k) => navigate({ search: (prev) => ({ ...prev, metric: k === "visitors" ? undefined : k }) })}
           />
         </div>
-        <div class={`px-3 pt-5 pb-2 transition-opacity sm:px-5 ${series.isPlaceholderData ? "opacity-60" : ""}`}>
+        <CardContent class={`px-3 pt-5 pb-2 transition-opacity sm:px-5 ${series.isPlaceholderData ? "opacity-60" : ""}`}>
           <Show when={ready(series)} fallback={<Skeleton class="h-[260px]" />}>
             {(data) => (
               <TrafficChart
@@ -121,7 +121,7 @@ function Dashboard() {
               />
             )}
           </Show>
-        </div>
+        </CardContent>
       </Card>
 
       <div class="grid gap-4 md:grid-cols-2">

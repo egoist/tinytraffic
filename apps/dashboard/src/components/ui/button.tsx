@@ -3,16 +3,18 @@ import { splitProps, type JSX } from "solid-js";
 import { cn } from "~/lib/utils";
 
 export const buttonVariants = cva(
-  "inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-[color,background-color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-[color,background-color,box-shadow] outline-none select-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90",
-        destructive: "bg-destructive text-white shadow-xs hover:bg-destructive/90",
-        outline: "border bg-card shadow-xs hover:bg-accent hover:text-accent-foreground",
-        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
-        link: "text-foreground underline-offset-4 hover:underline",
+        default: "btn-emphasis",
+        destructive: "btn-emphasis [--btn:var(--destructive)]",
+        // Raised: white face, hairline rim, small drop shadow; pressing sinks it.
+        outline:
+          "bg-card text-foreground shadow-xs ring ring-line hover:bg-accent active:bg-recessed active:shadow-none focus-visible:ring-2 focus-visible:ring-ring data-[expanded]:bg-accent",
+        secondary: "bg-recessed text-secondary-foreground ring ring-border hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring",
+        ghost: "hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring data-[expanded]:bg-accent",
+        link: "text-foreground underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring",
       },
       size: {
         default: "h-9 px-4 py-2",

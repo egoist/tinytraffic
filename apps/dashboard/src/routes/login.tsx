@@ -4,7 +4,7 @@ import { createSignal, Show } from "solid-js";
 import { isServer } from "solid-js/web";
 import { Logo } from "~/components/logo";
 import { Button } from "~/components/ui/button";
-import { Card } from "~/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input, Label } from "~/components/ui/input";
 import { api } from "~/lib/api";
 import { ready } from "~/lib/query";
@@ -50,13 +50,18 @@ function Login() {
         <div class="mb-8 flex justify-center">
           <Logo class="text-lg" />
         </div>
-        <Card class="p-6">
-          <h1 class="text-lg font-semibold tracking-tight">{setup() ? "Set up your dashboard" : "Welcome back"}</h1>
-          <p class="mt-1 text-sm text-muted-foreground">
-            {setup() ? "Choose a password. You'll use it to sign in." : "Enter your password to view your stats."}
-          </p>
+        <Card>
+          <CardHeader>
+            <CardTitle class="text-base">
+              <h1>{setup() ? "Set up your dashboard" : "Welcome back"}</h1>
+            </CardTitle>
+            <CardDescription>
+              {setup() ? "Choose a password. You'll use it to sign in." : "Enter your password to view your stats."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
           <form
-            class="mt-6 grid gap-4"
+            class="grid gap-4"
             onSubmit={(e) => {
               e.preventDefault();
               submit.mutate();
@@ -90,6 +95,7 @@ function Login() {
               {submit.isPending ? "One moment…" : setup() ? "Create password" : "Sign in"}
             </Button>
           </form>
+          </CardContent>
         </Card>
       </div>
     </main>

@@ -29,7 +29,7 @@ export function MetricTiles(props: {
   onSelect: (k: MetricKey) => void;
 }) {
   return (
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+    <div class="grid grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-6">
       <For each={metricDefs}>
         {(m) => {
           const value = () => props.current?.[m.key];
@@ -41,11 +41,17 @@ export function MetricTiles(props: {
               onClick={() => props.onSelect(m.key)}
               aria-pressed={selected()}
               class={cn(
-                "group relative cursor-pointer px-5 py-4 text-left outline-none transition-colors hover:bg-accent/50 focus-visible:bg-accent/60",
-                selected() && "bg-accent/40",
+                "group relative cursor-pointer rounded-lg px-3.5 py-3 text-left outline-none transition-[background-color,box-shadow] hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring",
+                selected() && "bg-card shadow-sm ring ring-line hover:bg-card",
               )}
             >
-              <div class="text-xs font-medium text-muted-foreground">{m.label}</div>
+              <div class="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <span
+                  class={cn("size-1.5 rounded-full bg-chart-1 transition-opacity", selected() ? "opacity-100" : "opacity-0")}
+                  aria-hidden="true"
+                />
+                {m.label}
+              </div>
               <Show when={value() !== undefined} fallback={<Skeleton class="mt-2 h-7 w-20" />}>
                 <div class="mt-1.5 flex items-baseline gap-2">
                   <span
@@ -57,12 +63,6 @@ export function MetricTiles(props: {
                   <Delta value={delta()} upIsGood={m.upIsGood} />
                 </div>
               </Show>
-              <span
-                class={cn(
-                  "absolute inset-x-5 bottom-0 h-0.5 rounded-full bg-chart-1 transition-opacity",
-                  selected() ? "opacity-100" : "opacity-0",
-                )}
-              />
             </button>
           );
         }}

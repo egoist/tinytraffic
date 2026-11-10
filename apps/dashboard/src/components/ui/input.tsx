@@ -6,7 +6,7 @@ export function Input(props: JSX.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       class={cn(
-        "flex h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive",
+        "flex h-9 w-full min-w-0 rounded-lg border-0 bg-card px-3 py-1 text-sm shadow-[inset_0_1px_1px_0_rgb(0_0_0/0.04)] ring ring-line transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:ring-destructive",
         local.class,
       )}
       {...rest}
@@ -19,7 +19,7 @@ export function NativeSelect(props: JSX.SelectHTMLAttributes<HTMLSelectElement>)
   return (
     <select
       class={cn(
-        "flex h-9 w-full appearance-none rounded-md border border-input bg-transparent bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2216%22 height=%2216%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23888%22 stroke-width=%222%22><path d=%22m6 9 6 6 6-6%22/></svg>')] bg-[right_0.6rem_center] bg-no-repeat pr-8 pl-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/40 dark:[&>option]:bg-popover",
+        "flex h-9 w-full appearance-none rounded-lg border-0 bg-card select-chevron pr-8 pl-3 text-sm shadow-xs ring ring-line outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring dark:[&>option]:bg-popover",
         local.class,
       )}
       {...rest}

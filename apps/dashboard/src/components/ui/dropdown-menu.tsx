@@ -15,7 +15,7 @@ export function DropdownMenuContent(props: ComponentProps<"div"> & { children: J
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
         class={cn(
-          "z-50 min-w-44 origin-[var(--kb-menu-content-transform-origin)] overflow-hidden rounded-lg border bg-popover p-1 text-popover-foreground shadow-lg outline-none data-[expanded]:animate-in data-[expanded]:fade-in-0 data-[expanded]:zoom-in-95 data-[closed]:animate-out data-[closed]:fade-out-0 data-[closed]:zoom-out-95",
+          "z-50 min-w-44 origin-[var(--kb-menu-content-transform-origin)] overflow-hidden rounded-xl bg-popover p-1 text-popover-foreground shadow-[0_12px_32px_-8px_rgb(0_0_0/0.18)] ring ring-line outline-none data-[expanded]:animate-in data-[expanded]:fade-in-0 data-[expanded]:zoom-in-95 data-[closed]:animate-out data-[closed]:fade-out-0 data-[closed]:zoom-out-95",
           local.class,
         )}
         {...rest}

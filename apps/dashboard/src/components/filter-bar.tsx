@@ -15,7 +15,7 @@ export function FilterBar(props: { filters: string[]; onRemove: (f: string) => v
           {(f) => {
             const { dim, value } = parseFilter(f);
             return (
-              <span class="inline-flex h-7 items-center gap-1.5 rounded-full border bg-card pr-1 pl-3 text-xs shadow-xs">
+              <span class="inline-flex h-7 items-center gap-1.5 rounded-full bg-card pr-1 pl-3 text-xs shadow-xs ring ring-line">
                 <span class="text-muted-foreground">{dimLabels[dim] ?? dim}</span>
                 <span class="text-muted-foreground">is</span>
                 <span class="max-w-56 truncate font-medium">{valueLabel(dim, value)}</span>

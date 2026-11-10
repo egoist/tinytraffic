@@ -6,7 +6,7 @@ import { valueLabel } from "~/lib/dims";
 import { flag, formatFull, formatNumber, formatPercent } from "~/lib/format";
 import { cn } from "~/lib/utils";
 import { Button } from "./ui/button";
-import { Card } from "./ui/card";
+import { Card, CardContent } from "./ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Skeleton } from "./ui/skeleton";
@@ -117,7 +117,7 @@ function Rows(props: {
                         onClick={() => toggle(row.value)}
                         aria-expanded={open()}
                         aria-label={`${open() ? "Hide" : "Show"} links from ${row.value}`}
-                        class="grid size-6 shrink-0 cursor-pointer place-items-center rounded text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+                        class="grid size-6 shrink-0 cursor-pointer place-items-center rounded text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         <ChevronRight class={cn("size-4 transition-transform", open() && "rotate-90")} />
                       </button>
@@ -127,7 +127,7 @@ function Rows(props: {
                 <button
                   type="button"
                   onClick={() => props.onFilter(props.tab.dim, row.value)}
-                  class="group relative flex h-8 min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-md text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                  class="group relative flex h-8 min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-md text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   title={`Filter by ${valueLabel(props.tab.dim, row.value)}`}
                 >
                   <span
@@ -158,7 +158,7 @@ function Rows(props: {
                     href={`https://${row.value}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="grid size-6 shrink-0 place-items-center rounded text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+                    class="grid size-6 shrink-0 place-items-center rounded text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
                     aria-label={`Open ${row.value}`}
                     title="Open link"
                   >
@@ -205,13 +205,14 @@ export function BreakdownPanel(props: {
   const [open, setOpen] = createSignal(false);
 
   return (
-    <Card class={cn("flex min-w-0 flex-col p-4 sm:p-5", props.class)}>
-      <div class="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <h3 class="text-[15px] font-semibold tracking-tight">{props.title}</h3>
+    <Card class={cn("min-w-0", props.class)}>
+      <div class="flex min-h-12 flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2 pr-2.5 pl-5">
+        <h3 class="text-sm font-semibold tracking-tight">{props.title}</h3>
         <Show when={props.tabs.length > 1}>
           <TextTabs value={tabDim()} onChange={setTabDim} items={props.tabs.map((t) => ({ value: t.dim, label: t.label }))} />
         </Show>
       </div>
+      <CardContent class="flex flex-col p-3 pt-4 sm:p-4">
 
       <div class="mb-1.5 flex items-center justify-between px-2.5 text-xs font-medium text-muted-foreground">
         <span>{tab().column}</span>
@@ -257,6 +258,7 @@ export function BreakdownPanel(props: {
       <Show when={props.footer}>
         <div class="mt-3 text-right text-[11px] text-muted-foreground">{props.footer}</div>
       </Show>
+      </CardContent>
 
       <Show when={open()}>
         <DetailsDialog

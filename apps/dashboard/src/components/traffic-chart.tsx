@@ -194,7 +194,7 @@ export function TrafficChart(props: {
           const flip = () => h().c[0] + 12 + TIP > width();
           return (
             <div
-              class="pointer-events-none absolute top-2 z-10 rounded-lg border bg-popover px-3 py-2 whitespace-nowrap text-popover-foreground shadow-md"
+              class="pointer-events-none absolute top-2 z-10 rounded-lg bg-popover px-3 py-2 whitespace-nowrap text-popover-foreground shadow-[0_8px_24px_-6px_rgb(0_0_0/0.18)] ring ring-line"
               style={flip() ? { right: `${width() - h().c[0] + 12}px` } : { left: `${h().c[0] + 12}px` }}
             >
               <div class="text-xs text-muted-foreground">{formatBucket(h().p.date, props.interval, true)}</div>

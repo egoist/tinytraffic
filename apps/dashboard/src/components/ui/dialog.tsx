@@ -14,13 +14,13 @@ export function DialogContent(props: ComponentProps<"div"> & { children: JSX.Ele
       <div class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 pt-[12vh]">
         <DialogPrimitive.Content
           class={cn(
-            "relative grid w-full max-w-md gap-5 rounded-xl border bg-popover p-6 text-popover-foreground shadow-xl outline-none data-[expanded]:animate-in data-[expanded]:fade-in-0 data-[expanded]:zoom-in-[0.98] data-[closed]:animate-out data-[closed]:fade-out-0 data-[closed]:zoom-out-[0.98]",
+            "relative grid w-full max-w-md gap-5 rounded-2xl bg-popover p-6 text-popover-foreground shadow-[0_24px_48px_-12px_rgb(0_0_0/0.25)] ring ring-line outline-none data-[expanded]:animate-in data-[expanded]:fade-in-0 data-[expanded]:zoom-in-[0.98] data-[closed]:animate-out data-[closed]:fade-out-0 data-[closed]:zoom-out-[0.98]",
             local.class,
           )}
           {...rest}
         >
           {local.children}
-          <DialogPrimitive.CloseButton class="absolute top-4 right-4 cursor-pointer rounded-sm opacity-60 transition-opacity hover:opacity-100 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none">
+          <DialogPrimitive.CloseButton class="absolute top-4 right-4 grid size-7 cursor-pointer place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
             <X class="size-4" />
             <span class="sr-only">Close</span>
           </DialogPrimitive.CloseButton>
