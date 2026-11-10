@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math"
+	"strconv"
 	"time"
 )
 
@@ -290,3 +292,153 @@ SELECT site_id, count(DISTINCT visitor_id) FROM events WHERE ts >= ? GROUP BY 1`
 	}
 	return out, totals.Err()
 }
+
+type LocationPoint struct {
+	Country  string  `json:"country"`
+	City     string  `json:"city"`
+	Lat      float64 `json:"lat"`
+	Lon      float64 `json:"lon"`
+	Visitors int64   `json:"visitors"`
+}
+
+// Locations returns one point per city, busiest first, for maps. Events
+// without coordinates are left out.
+func Locations(ctx context.Context, db *sql.DB, q Query, limit int) ([]LocationPoint, error) {
+	where, args := q.where(q.Start, q.End)
+	rows, err := db.QueryContext(ctx, fmt.Sprintf(`
+SELECT country, city, avg(latitude), avg(longitude), count(DISTINCT visitor_id) AS visitors
+FROM events WHERE %s AND latitude IS NOT NULL
+GROUP BY country, city ORDER BY visitors DESC, country, city LIMIT ?`, where), append(args, limit)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []LocationPoint{}
+	for rows.Next() {
+		var p LocationPoint
+		if err := rows.Scan(&p.Country, &p.City, &p.Lat, &p.Lon, &p.Visitors); err != nil {
+			return nil, err
+		}
+		p.Lat, p.Lon = round2(p.Lat), round2(p.Lon)
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+func round2(f float64) float64 { return math.Round(f*100) / 100 }
+
+// LiveWindow is how far back the live view looks, the same window as
+// Realtime's "current visitors".
+const LiveWindow = 5 * time.Minute
+
+// LiveSession is a visit with activity in the live window.
+type LiveSession struct {
+	ID        string    `json:"id"`
+	Country   string    `json:"country"`
+	Region    string    `json:"region"`
+	City      string    `json:"city"`
+	Lat       *float64  `json:"lat"` // nil when the location is unknown
+	Lon       *float64  `json:"lon"`
+	Page      string    `json:"page"` // the last page viewed
+	Source    string    `json:"source"`
+	Referrer  string    `json:"referrer"`
+	Browser   string    `json:"browser"`
+	OS        string    `json:"os"`
+	Device    string    `json:"device"`
+	Pageviews int64     `json:"pageviews"`
+	Events    int64     `json:"events"` // custom events
+	StartedAt time.Time `json:"started_at"`
+	LastSeen  time.Time `json:"last_seen"`
+}
+
+// LiveEvent is one entry of the live activity feed.
+type LiveEvent struct {
+	Timestamp time.Time `json:"ts"`
+	Session   string    `json:"session"`
+	Name      string    `json:"name"`
+	Page      string    `json:"page"`
+}
+
+type LiveResult struct {
+	Visitors int64         `json:"visitors"`
+	Sessions []LiveSession `json:"sessions"`
+	Events   []LiveEvent   `json:"events"` // newest first
+}
+
+// Live returns the sessions active in the last LiveWindow, most recently
+// active first, and their latest events. Session details (entry source,
+// start time, pageviews) cover the whole visit, not only the window.
+func Live(ctx context.Context, db *sql.DB, siteID int32, now time.Time, limit int) (LiveResult, error) {
+	res := LiveResult{Sessions: []LiveSession{}, Events: []LiveEvent{}}
+	since := now.Add(-LiveWindow).UTC()
+	// Sessions end after 30 minutes of inactivity but can run longer; a few
+	// hours back covers all but marathon visits.
+	visitStart := now.Add(-6 * time.Hour).UTC()
+
+	if err := db.QueryRowContext(ctx,
+		`SELECT count(DISTINCT visitor_id) FROM events WHERE site_id = ? AND ts >= ?`,
+		siteID, since).Scan(&res.Visitors); err != nil {
+		return res, err
+	}
+
+	rows, err := db.QueryContext(ctx, `
+WITH active AS (
+	SELECT session_id, max(ts) AS last_seen FROM events
+	WHERE site_id = ? AND ts >= ? GROUP BY 1 ORDER BY 2 DESC LIMIT ?
+)
+SELECT e.session_id, any_value(a.last_seen),
+	arg_max(e.country, e.ts), arg_max(e.region, e.ts), arg_max(e.city, e.ts),
+	arg_max(e.latitude, e.ts), arg_max(e.longitude, e.ts),
+	coalesce(arg_max(e.pathname, e.ts) FILTER (WHERE e.name = 'pageview'), arg_max(e.pathname, e.ts)),
+	arg_min(e.referrer_source, e.ts), arg_min(e.referrer, e.ts),
+	arg_max(e.browser, e.ts), arg_max(e.os, e.ts), arg_max(e.device, e.ts),
+	count(*) FILTER (WHERE e.name = 'pageview'), count(*) FILTER (WHERE e.name <> 'pageview'),
+	min(e.ts)
+FROM events e JOIN active a USING (session_id)
+WHERE e.site_id = ? AND e.ts >= ?
+GROUP BY e.session_id ORDER BY 2 DESC`, siteID, since, limit, siteID, visitStart)
+	if err != nil {
+		return res, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var s LiveSession
+		var id uint64
+		var lat, lon sql.NullFloat64
+		if err := rows.Scan(&id, &s.LastSeen, &s.Country, &s.Region, &s.City, &lat, &lon,
+			&s.Page, &s.Source, &s.Referrer, &s.Browser, &s.OS, &s.Device,
+			&s.Pageviews, &s.Events, &s.StartedAt); err != nil {
+			return res, err
+		}
+		s.ID = sessionKey(id)
+		if lat.Valid && lon.Valid {
+			la, lo := round2(lat.Float64), round2(lon.Float64)
+			s.Lat, s.Lon = &la, &lo
+		}
+		res.Sessions = append(res.Sessions, s)
+	}
+	if err := rows.Err(); err != nil {
+		return res, err
+	}
+
+	events, err := db.QueryContext(ctx, `
+SELECT ts, session_id, name, pathname FROM events
+WHERE site_id = ? AND ts >= ? ORDER BY ts DESC LIMIT 50`, siteID, since)
+	if err != nil {
+		return res, err
+	}
+	defer events.Close()
+	for events.Next() {
+		var e LiveEvent
+		var id uint64
+		if err := events.Scan(&e.Timestamp, &id, &e.Name, &e.Page); err != nil {
+			return res, err
+		}
+		e.Session = sessionKey(id)
+		res.Events = append(res.Events, e)
+	}
+	return res, events.Err()
+}
+
+// Session IDs are 64-bit, beyond what a JavaScript number holds exactly.
+func sessionKey(id uint64) string { return strconv.FormatUint(id, 36) }

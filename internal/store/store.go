@@ -165,6 +165,13 @@ var migrations = [][]string{
 			site_id INTEGER NOT NULL
 		)`,
 	},
+	{
+		// City coordinates from GeoIP (rounded to ~1 km), for the globe.
+		// NULL when unknown, including for events recorded before this.
+		// (Some development databases already have them.)
+		`ALTER TABLE events ADD COLUMN IF NOT EXISTS latitude FLOAT`,
+		`ALTER TABLE events ADD COLUMN IF NOT EXISTS longitude FLOAT`,
+	},
 }
 
 func (s *Store) migrate() error {

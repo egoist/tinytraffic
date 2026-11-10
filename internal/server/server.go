@@ -62,6 +62,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/sites/{site}/timeseries", s.private(s.timeseries))
 	mux.HandleFunc("GET /api/sites/{site}/breakdown/{dim}", s.private(s.breakdown))
 	mux.HandleFunc("GET /api/sites/{site}/realtime", s.private(s.realtime))
+	mux.HandleFunc("GET /api/sites/{site}/locations", s.private(s.locations))
+	mux.HandleFunc("GET /api/sites/{site}/live", s.private(s.live))
 	s.publicRoutes(mux)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
@@ -435,6 +437,36 @@ func (s *Server) realtime(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]int64{"visitors": n})
+}
+
+func (s *Server) locations(w http.ResponseWriter, r *http.Request) {
+	q, ok := s.query(w, r)
+	if !ok {
+		return
+	}
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	if limit <= 0 || limit > 1000 {
+		limit = 200
+	}
+	points, err := stats.Locations(r.Context(), s.Store.DB, q, limit)
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"points": points})
+}
+
+func (s *Server) live(w http.ResponseWriter, r *http.Request) {
+	site, ok := s.site(w, r)
+	if !ok {
+		return
+	}
+	res, err := stats.Live(r.Context(), s.Store.DB, site.ID, time.Now(), 300)
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
 }
 
 // --- static ---

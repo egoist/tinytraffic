@@ -27,13 +27,16 @@ func TestGeoDBIP(t *testing.T) {
 		{"::ffff:81.2.69.142", "GB"}, // IPv4-mapped, as seen on dual-stack listeners
 	} {
 		ip := netip.MustParseAddr(c.ip).Unmap()
-		country, region, city := g.Lookup(ip)
-		if country != c.country || region == "" || city == "" {
-			t.Errorf("Lookup(%s) = %q, %q, %q; want country %q with region and city", c.ip, country, region, city, c.country)
+		loc := g.Lookup(ip)
+		if loc.Country != c.country || loc.Region == "" || loc.City == "" || !loc.HasCoords {
+			t.Errorf("Lookup(%s) = %+v; want country %q with region, city and coordinates", c.ip, loc, c.country)
 		}
 	}
-	if country, _, _ := g.Lookup(netip.MustParseAddr("127.0.0.1")); country != "" {
-		t.Errorf("loopback resolved to %q", country)
+	if loc := g.Lookup(netip.MustParseAddr("127.0.0.1")); loc.Country != "" || loc.HasCoords {
+		t.Errorf("loopback resolved to %+v", loc)
+	}
+	if loc := g.Lookup(netip.MustParseAddr("81.2.69.142")); loc.Lat < 51 || loc.Lat > 52 || loc.Lon < -1 || loc.Lon > 1 {
+		t.Errorf("London coordinates: %+v", loc)
 	}
 	if a := g.Attribution(); a.URL != "https://db-ip.com" {
 		t.Errorf("attribution = %+v", a)
@@ -45,8 +48,10 @@ func TestParseGeoRecordMaxMindLayout(t *testing.T) {
 		"country":      map[string]any{"iso_code": "DE"},
 		"subdivisions": []any{map[string]any{"names": map[string]any{"en": "Berlin"}}},
 		"city":         map[string]any{"names": map[string]any{"en": "Berlin"}},
+		"location":     map[string]any{"latitude": 52.520008, "longitude": 13.404954},
 	}
-	if c, r, ci := parseGeoRecord(rec); c != "DE" || r != "Berlin" || ci != "Berlin" {
-		t.Errorf("got %q, %q, %q", c, r, ci)
+	want := Location{Country: "DE", Region: "Berlin", City: "Berlin", Lat: 52.52, Lon: 13.4, HasCoords: true}
+	if got := parseGeoRecord(rec); got != want {
+		t.Errorf("got %+v, want %+v", got, want)
 	}
 }

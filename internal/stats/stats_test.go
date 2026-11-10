@@ -171,3 +171,66 @@ func TestReferrerDomainsAndLinks(t *testing.T) {
 		t.Errorf("links under someblog.dev: got %+v, want %+v", res.Rows, want)
 	}
 }
+
+func TestLocations(t *testing.T) {
+	st := openTestStore(t)
+	site, _ := st.CreateSite("example.com", "UTC")
+	now := time.Now().UTC()
+	ev := func(v uint64, city string, lat, lon float32, has bool) store.Event {
+		return store.Event{Timestamp: now.Add(-time.Hour), SiteID: site.ID, Name: "pageview", Pathname: "/",
+			Country: "XX", City: city, HasLocation: has, Latitude: lat, Longitude: lon, VisitorID: v, SessionID: v}
+	}
+	store.InsertEvents(context.Background(), st.DB, []store.Event{
+		ev(1, "London", 51.51, -0.13, true), ev(2, "London", 51.51, -0.13, true), ev(2, "London", 51.51, -0.13, true),
+		ev(3, "Paris", 48.86, 2.35, true),
+		ev(4, "", 0, 0, false), // unknown location is left out
+	})
+	q, _ := ParseQuery(site, url.Values{"period": {"7d"}}, now, nil)
+	points, err := Locations(context.Background(), st.DB, q, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []LocationPoint{{"XX", "London", 51.51, -0.13, 2}, {"XX", "Paris", 48.86, 2.35, 1}}
+	if fmt.Sprint(points) != fmt.Sprint(want) {
+		t.Errorf("got %+v, want %+v", points, want)
+	}
+}
+
+func TestLive(t *testing.T) {
+	st := openTestStore(t)
+	site, _ := st.CreateSite("example.com", "UTC")
+	now := time.Now().UTC()
+	ev := func(session uint64, ago time.Duration, name, page string) store.Event {
+		return store.Event{Timestamp: now.Add(-ago), SiteID: site.ID, Name: name, Pathname: page,
+			VisitorID: session, SessionID: session, ReferrerSource: "Google",
+			Country: "DE", City: "Berlin", HasLocation: session == 1, Latitude: 52.52, Longitude: 13.4}
+	}
+	store.InsertEvents(context.Background(), st.DB, []store.Event{
+		// Started 20 minutes ago, still browsing.
+		ev(1, 20*time.Minute, "pageview", "/"),
+		ev(1, 2*time.Minute, "pageview", "/pricing"),
+		ev(1, time.Minute, "Signup", "/pricing"),
+		// Active a moment ago, location unknown.
+		ev(2, 30*time.Second, "pageview", "/blog"),
+		// Left 10 minutes ago.
+		ev(3, 10*time.Minute, "pageview", "/"),
+	})
+	res, err := Live(context.Background(), st.DB, site.ID, now, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Visitors != 2 || len(res.Sessions) != 2 || len(res.Events) != 3 {
+		t.Fatalf("got %d visitors, %d sessions, %d events; want 2, 2, 3", res.Visitors, len(res.Sessions), len(res.Events))
+	}
+	recent, browsing := res.Sessions[0], res.Sessions[1]
+	if recent.Page != "/blog" || recent.Lat != nil {
+		t.Errorf("most recent session: %+v", recent)
+	}
+	if browsing.Page != "/pricing" || browsing.Pageviews != 2 || browsing.Events != 1 || browsing.Source != "Google" ||
+		browsing.Lat == nil || *browsing.Lat != 52.52 || now.Sub(browsing.StartedAt) < 19*time.Minute {
+		t.Errorf("browsing session: %+v", browsing)
+	}
+	if e := res.Events[0]; e.Page != "/blog" || e.Session != recent.ID {
+		t.Errorf("newest event: %+v", e)
+	}
+}

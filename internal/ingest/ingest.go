@@ -132,7 +132,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if s := first(q.Get("utm_source"), q.Get("ref"), q.Get("source")); s != "" {
 		source = normalizeUTMSource(s)
 	}
-	country, region, city := h.Geo.Lookup(ip)
+	loc := h.Geo.Lookup(ip)
 	agent := useragent.Parse(ua)
 
 	base := store.Event{
@@ -147,9 +147,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		UTMCampaign:    clip(q.Get("utm_campaign"), 255),
 		UTMContent:     clip(q.Get("utm_content"), 255),
 		UTMTerm:        clip(q.Get("utm_term"), 255),
-		Country:        country,
-		Region:         region,
-		City:           city,
+		Country:        loc.Country,
+		Region:         loc.Region,
+		City:           loc.City,
 		Browser:        agent.Name,
 		BrowserVersion: majorVersion(agent.Version),
 		OS:             agent.OS,
@@ -157,6 +157,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Device:         deviceType(p.W, agent),
 		ScreenWidth:    uint16(min(max(p.W, 0), 65535)),
 		Props:          encodeProps(p.P),
+		HasLocation:    loc.HasCoords,
+		Latitude:       float32(loc.Lat),
+		Longitude:      float32(loc.Lon),
 	}
 
 	// Several domains can point to the same site, e.g. its current domain

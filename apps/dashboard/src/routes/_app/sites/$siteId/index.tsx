@@ -1,12 +1,14 @@
 import { keepPreviousData, useQuery } from "@tanstack/solid-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/solid-router";
-import { createMemo, Show } from "solid-js";
+import { Earth } from "lucide-solid";
+import { createMemo, onCleanup, onMount, Show } from "solid-js";
 import { BreakdownPanel } from "~/components/breakdown-panel";
 import { FilterBar, parseFilter } from "~/components/filter-bar";
 import { metricDefs, MetricTiles, type MetricKey } from "~/components/metric-tiles";
 import { PeriodPicker, type PeriodValue } from "~/components/period-picker";
 import { Realtime } from "~/components/realtime";
 import { TrafficChart } from "~/components/traffic-chart";
+import { buttonVariants } from "~/components/ui/button";
 import { Card, CardContent, Surface } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
 import { api, type StatsParams } from "~/lib/api";
@@ -76,13 +78,35 @@ function Dashboard() {
         f: [...(prev.f ?? []).filter((f) => parseFilter(f).dim !== dim), `${dim}:${value}`],
       }),
     });
+  // L opens the live view (and closes it again from there).
+  onMount(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.key.toLowerCase() !== "l") return;
+      if ((e.target as HTMLElement).closest("input, textarea, select, [contenteditable], [role=dialog]")) return;
+      e.preventDefault();
+      navigate({ to: "/sites/$siteId/live", params: { siteId: siteId() } });
+    };
+    window.addEventListener("keydown", onKey);
+    onCleanup(() => window.removeEventListener("keydown", onKey));
+  });
+
   const removeFilter = (f: string) =>
     navigate({ search: (prev) => ({ ...prev, f: (prev.f ?? []).filter((x) => x !== f) }) });
 
   return (
     <div class="flex flex-col gap-4">
       <div class="flex flex-wrap items-center justify-between gap-3">
-        <Realtime site={siteId()} />
+        <div class="flex items-center gap-3">
+          <Realtime site={siteId()} />
+          <Link
+            to="/sites/$siteId/live"
+            params={{ siteId: siteId() }}
+            class={buttonVariants({ variant: "outline", size: "sm" })}
+            title="Live view (L)"
+          >
+            <Earth class="text-muted-foreground" /> Live view
+          </Link>
+        </div>
         <PeriodPicker value={{ period: stats().period as Period, from: stats().from, to: stats().to }} onChange={setPeriod} />
       </div>
 

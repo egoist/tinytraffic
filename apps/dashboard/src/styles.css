@@ -169,3 +169,33 @@
   background-position: right 0.6rem center;
   background-repeat: no-repeat;
 }
+
+/* A ring that grows and fades from a live-view sticker on new activity. */
+@keyframes sticker-ping {
+  from {
+    opacity: 0.9;
+    scale: 1;
+  }
+  to {
+    opacity: 0;
+    scale: 2.2;
+  }
+}
+
+/*
+ * A card pinned beside a globe marker (set --anchor to the marker's anchor
+ * name): to its right, flipping left when there's no room, and above it on
+ * phones.
+ */
+@utility pinned-card {
+  position-anchor: var(--anchor);
+  position-area: right;
+  margin-left: 26px;
+  position-try-fallbacks: flip-inline;
+  @media (width < 40rem) {
+    position-area: top;
+    margin-left: 0;
+    margin-bottom: 26px;
+    position-try-fallbacks: flip-block;
+  }
+}

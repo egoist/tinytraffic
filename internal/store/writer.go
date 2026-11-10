@@ -12,7 +12,7 @@ import (
 	"github.com/duckdb/duckdb-go/v2"
 )
 
-// Event is one row of the events table. Field order matches the column order.
+// Event is one row of the events table. Field order matches eventColumns.
 type Event struct {
 	Timestamp      time.Time
 	SiteID         int32
@@ -38,6 +38,10 @@ type Event struct {
 	Device         string
 	ScreenWidth    uint16
 	Props          string
+	// City coordinates from GeoIP, stored as NULL unless HasLocation.
+	HasLocation bool
+	Latitude    float32
+	Longitude   float32
 }
 
 const (
@@ -131,6 +135,17 @@ func (w *Writer) insert(batch []Event) error {
 	return InsertEvents(context.Background(), w.db, batch)
 }
 
+// eventColumns are named for the appender, since columns added by later
+// migrations sit at the end of older tables but inline in newer ones.
+var eventColumns = []string{
+	"ts", "site_id", "name", "hostname", "pathname",
+	"visitor_id", "session_id", "referrer", "referrer_source",
+	"utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
+	"country", "region", "city",
+	"browser", "browser_version", "os", "os_version", "device",
+	"screen_width", "props", "latitude", "longitude",
+}
+
 // InsertEvents appends events in one batch.
 func InsertEvents(ctx context.Context, db *sql.DB, events []Event) error {
 	conn, err := db.Conn(ctx)
@@ -139,18 +154,22 @@ func InsertEvents(ctx context.Context, db *sql.DB, events []Event) error {
 	}
 	defer conn.Close()
 	return conn.Raw(func(dc any) error {
-		a, err := duckdb.NewAppenderFromConn(dc.(driver.Conn), "", "events")
+		a, err := duckdb.NewAppenderWithColumns(dc.(driver.Conn), "", "", "events", eventColumns)
 		if err != nil {
 			return err
 		}
 		for _, e := range events {
+			var lat, lon driver.Value
+			if e.HasLocation {
+				lat, lon = e.Latitude, e.Longitude
+			}
 			if err := a.AppendRow(
 				e.Timestamp, e.SiteID, e.Name, e.Hostname, e.Pathname,
 				e.VisitorID, e.SessionID, e.Referrer, e.ReferrerSource,
 				e.UTMSource, e.UTMMedium, e.UTMCampaign, e.UTMContent, e.UTMTerm,
 				e.Country, e.Region, e.City,
 				e.Browser, e.BrowserVersion, e.OS, e.OSVersion, e.Device,
-				e.ScreenWidth, e.Props,
+				e.ScreenWidth, e.Props, lat, lon,
 			); err != nil {
 				a.Close()
 				return err

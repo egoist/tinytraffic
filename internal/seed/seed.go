@@ -32,7 +32,10 @@ func pick[T any](r *rand.Rand, items []weighted[T]) T {
 }
 
 type source struct{ referrer, source, utmSource, utmMedium, utmCampaign string }
-type place struct{ country, region, city string }
+type place struct {
+	country, region, city string
+	lat, lon              float32
+}
 type agent struct{ browser, version, os, osVersion string }
 
 var (
@@ -61,15 +64,15 @@ var (
 		{source{"discuss.example.org/t/privacy-friendly-analytics/381", "discuss.example.org", "", "", ""}, 1},
 	}
 	places = []weighted[place]{
-		{place{"US", "California", "San Francisco"}, 10}, {place{"US", "New York", "New York"}, 8},
-		{place{"US", "Washington", "Seattle"}, 4}, {place{"US", "Texas", "Austin"}, 3},
-		{place{"DE", "Berlin", "Berlin"}, 7}, {place{"GB", "England", "London"}, 7},
-		{place{"FR", "Île-de-France", "Paris"}, 4}, {place{"NL", "North Holland", "Amsterdam"}, 3},
-		{place{"CA", "Ontario", "Toronto"}, 4}, {place{"IN", "Karnataka", "Bengaluru"}, 6},
-		{place{"JP", "Tokyo", "Tokyo"}, 4}, {place{"CN", "Shanghai", "Shanghai"}, 4},
-		{place{"BR", "São Paulo", "São Paulo"}, 3}, {place{"AU", "New South Wales", "Sydney"}, 2},
-		{place{"SE", "Stockholm", "Stockholm"}, 2}, {place{"KR", "Seoul", "Seoul"}, 2},
-		{place{"SG", "", "Singapore"}, 2}, {place{"PL", "Mazovia", "Warsaw"}, 2},
+		{place{"US", "California", "San Francisco", 37.77, -122.42}, 10}, {place{"US", "New York", "New York", 40.71, -74.01}, 8},
+		{place{"US", "Washington", "Seattle", 47.61, -122.33}, 4}, {place{"US", "Texas", "Austin", 30.27, -97.74}, 3},
+		{place{"DE", "Berlin", "Berlin", 52.52, 13.4}, 7}, {place{"GB", "England", "London", 51.51, -0.13}, 7},
+		{place{"FR", "Île-de-France", "Paris", 48.86, 2.35}, 4}, {place{"NL", "North Holland", "Amsterdam", 52.37, 4.9}, 3},
+		{place{"CA", "Ontario", "Toronto", 43.65, -79.38}, 4}, {place{"IN", "Karnataka", "Bengaluru", 12.97, 77.59}, 6},
+		{place{"JP", "Tokyo", "Tokyo", 35.68, 139.69}, 4}, {place{"CN", "Shanghai", "Shanghai", 31.23, 121.47}, 4},
+		{place{"BR", "São Paulo", "São Paulo", -23.55, -46.63}, 3}, {place{"AU", "New South Wales", "Sydney", -33.87, 151.21}, 2},
+		{place{"SE", "Stockholm", "Stockholm", 59.33, 18.07}, 2}, {place{"KR", "Seoul", "Seoul", 37.57, 126.98}, 2},
+		{place{"SG", "", "Singapore", 1.35, 103.82}, 2}, {place{"PL", "Mazovia", "Warsaw", 52.23, 21.01}, 2},
 	}
 	agents = []weighted[agent]{
 		{agent{"Chrome", "142", "macOS", "15.6"}, 22}, {agent{"Chrome", "142", "Windows", "10"}, 18},
@@ -159,6 +162,7 @@ func visit(r *rand.Rand, site store.Site, ts time.Time) []store.Event {
 		Referrer: src.referrer, ReferrerSource: src.source,
 		UTMSource: src.utmSource, UTMMedium: src.utmMedium, UTMCampaign: src.utmCampaign,
 		Country: pl.country, Region: pl.region, City: pl.city,
+		HasLocation: true, Latitude: pl.lat, Longitude: pl.lon,
 		Browser: ag.browser, BrowserVersion: ag.version, OS: ag.os, OSVersion: ag.osVersion,
 		Device: device, ScreenWidth: width,
 	}

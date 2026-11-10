@@ -1,4 +1,5 @@
-import { createFileRoute, Outlet, redirect } from "@tanstack/solid-router";
+import { createFileRoute, Outlet, redirect, useRouterState } from "@tanstack/solid-router";
+import { Show } from "solid-js";
 import { isServer } from "solid-js/web";
 import { AppHeader } from "~/components/app-header";
 import { api } from "~/lib/api";
@@ -15,12 +16,19 @@ export const Route = createFileRoute("/_app")({
 });
 
 function AppLayout() {
+  // The live view takes the whole window.
+  const fullscreen = useRouterState({ select: (s) => s.matches.some((m) => m.routeId === "/_app/sites/$siteId/live") });
   return (
-    <div class="min-h-dvh">
-      <AppHeader />
-      <main class="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
-        <Outlet />
-      </main>
-    </div>
+    <Show
+      when={!fullscreen()}
+      fallback={<Outlet />}
+    >
+      <div class="min-h-dvh">
+        <AppHeader />
+        <main class="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+          <Outlet />
+        </main>
+      </div>
+    </Show>
   );
 }

@@ -78,6 +78,34 @@ export type APIKey = {
   last_used_at: string | null;
 };
 
+export type LocationPoint = { country: string; city: string; lat: number; lon: number; visitors: number };
+
+/** A visit with activity in the last few minutes. */
+export type LiveSession = {
+  id: string;
+  country: string;
+  region: string;
+  city: string;
+  lat: number | null;
+  lon: number | null;
+  /** The last page viewed. */
+  page: string;
+  source: string;
+  referrer: string;
+  browser: string;
+  os: string;
+  device: string;
+  pageviews: number;
+  /** Custom events. */
+  events: number;
+  started_at: string;
+  last_seen: string;
+};
+
+export type LiveEvent = { ts: string; session: string; name: string; page: string };
+
+export type Live = { visitors: number; sessions: LiveSession[]; events: LiveEvent[] };
+
 export type StatsParams = { period: string; from?: string; to?: string; f?: string[] };
 
 function qs(p: StatsParams, extra?: Record<string, string>) {
@@ -115,6 +143,9 @@ export const api = {
   breakdown: (ref: string, dim: string, p: StatsParams, limit = 10) =>
     request<Breakdown>(`${site(ref)}/breakdown/${dim}?${qs(p, { limit: String(limit) })}`),
   realtime: (ref: string) => request<{ visitors: number }>(`${site(ref)}/realtime`),
+  locations: (ref: string, p: StatsParams, limit = 200) =>
+    request<{ points: LocationPoint[] }>(`${site(ref)}/locations?${qs(p, { limit: String(limit) })}`),
+  live: (ref: string) => request<Live>(`${site(ref)}/live`),
   info: () => request<ServerInfo>("/api/info"),
 
   keys: () => request<APIKey[]>("/api/keys"),
