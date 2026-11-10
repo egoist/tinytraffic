@@ -130,6 +130,25 @@ To switch an existing install to ClickHouse:
 
 A new install only needs steps 1 and 3.
 
+With Docker, run step 2 with the image against the same volume (the image
+already sets the data directory to `/data`), then add the URL to the server
+container:
+
+```sh
+docker stop tinytraffic
+docker run --rm -v tinytraffic:/data \
+  -e TT_CLICKHOUSE_URL=clickhouse://user:password@clickhouse-host:9000/tinytraffic \
+  ghcr.io/egoist/tinytraffic:main migrate-clickhouse
+# then start the server with -e TT_CLICKHOUSE_URL=... added to its other flags
+```
+
+The ClickHouse host must be reachable from inside the container, so
+`localhost` won't work. If ClickHouse runs in Docker, put both containers on
+one network and use its container name. If it runs on the host, use
+`host.docker.internal` (on Linux, also pass
+`--add-host=host.docker.internal:host-gateway`). In Dokploy, add
+`TT_CLICKHOUSE_URL` under the app's Environment tab.
+
 The URL is clickhouse-go's DSN: `clickhouse://` for the native protocol
 (port 9000) or `http://` / `https://` (port 8123). The `events` table is a
 `MergeTree` partitioned by month and ordered by
