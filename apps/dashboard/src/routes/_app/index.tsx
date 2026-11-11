@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/solid-router";
 import { Plus } from "lucide-solid";
 import { createSignal, For, Match, Switch } from "solid-js";
 import { AddSiteDialog } from "~/components/add-site-dialog";
+import { Realtime } from "~/components/realtime";
 import { Sparkline } from "~/components/sparkline";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, Surface } from "~/components/ui/card";
@@ -87,6 +88,9 @@ function SiteCard(props: { site: SiteWithStats }) {
               {formatNumber(props.site.visitors_24h)}
             </div>
             <div class="text-xs text-muted-foreground">{t().sites.visitors}</div>
+            <div class="mt-2">
+              <Realtime site={String(props.site.id)} />
+            </div>
           </div>
           <Sparkline values={props.site.sparkline} class="h-10 w-32" />
         </CardContent>
