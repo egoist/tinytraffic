@@ -175,7 +175,7 @@ func TestWriteScope(t *testing.T) {
 	// Changing the domain keeps the old one working, and sites can be
 	// addressed by ID.
 	rec := callJSON(h, "PATCH", "/api/v1/sites/new.com", writeKey, `{"domain":"renamed.com"}`)
-	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"domain":"renamed.com","timezone":"Asia/Tokyo","aliases":["new.com"]`) {
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"domain":"renamed.com","name":"","title":"","timezone":"Asia/Tokyo","aliases":["new.com"]`) {
 		t.Errorf("rename: %d %s", rec.Code, rec.Body)
 	}
 	site, _ := st.SiteByDomain("renamed.com")

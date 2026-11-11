@@ -35,6 +35,11 @@ export function formatPercent(n: number, digits = 0) {
   return `${n.toFixed(digits)}%`;
 }
 
+/** A site's name: the one its owner set, else its homepage's title, else its domain. */
+export function siteName(site: { name: string; title: string; domain: string }) {
+  return site.name || site.title || site.domain;
+}
+
 /** Percentage change, or null when there is nothing to compare against. */
 export function change(current: number, previous: number | undefined) {
   if (previous === undefined) return null;

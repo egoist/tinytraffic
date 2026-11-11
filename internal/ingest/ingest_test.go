@@ -98,6 +98,48 @@ func TestHandler(t *testing.T) {
 	}
 }
 
+// Only the homepage's title is kept, as the site's title.
+func TestHomepageTitle(t *testing.T) {
+	st, err := store.Open("", store.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	site, _ := st.CreateSite("example.com", "UTC")
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	w := store.NewWriter(st.Events, log)
+	h := NewHandler(Handler{Store: st, Writer: w, Salts: NewSalts(st), Log: log})
+
+	send := func(body string) {
+		req := httptest.NewRequest(http.MethodPost, "/api/event", strings.NewReader(body))
+		req.Header.Set("User-Agent", chromeUA)
+		req.RemoteAddr = "203.0.113.7:1234"
+		h.ServeHTTP(httptest.NewRecorder(), req)
+	}
+	title := func() string {
+		got, _ := st.SiteByID(site.ID)
+		return got.Title
+	}
+
+	send(`{"n":"pageview","u":"https://example.com/docs","d":"example.com","t":"Docs"}`)
+	if got := title(); got != "" {
+		t.Errorf("a page other than the homepage set the title to %q", got)
+	}
+	send(`{"n":"pageview","u":"https://example.com/","d":"example.com","t":"  Example \n Store  "}`)
+	if got := title(); got != "Example Store" {
+		t.Errorf("title = %q, want %q", got, "Example Store")
+	}
+	send(`{"n":"pageview","u":"https://example.com/","title":"Example Store, Redesigned"}`)
+	if got := title(); got != "Example Store, Redesigned" {
+		t.Errorf("title = %q, want the new title", got)
+	}
+	send(`{"n":"pageview","u":"https://example.com/","d":"example.com"}`)
+	if got := title(); got != "Example Store, Redesigned" {
+		t.Errorf("a pageview without a title changed it to %q", got)
+	}
+	w.Close()
+}
+
 // A trusted request (e.g. a server with a write key) may forward the
 // visitor's IP; anyone else's X-Forwarded-For is ignored.
 func TestTrustRequestForwardedIP(t *testing.T) {

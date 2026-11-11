@@ -15,8 +15,14 @@ import (
 )
 
 type Site struct {
-	ID       int32  `json:"id"`
-	Domain   string `json:"domain"`
+	ID     int32  `json:"id"`
+	Domain string `json:"domain"`
+	// Name is what the owner calls the site. Empty means the dashboard
+	// shows Title instead.
+	Name string `json:"name"`
+	// Title is the <title> of the site's homepage, as its visitors' browsers
+	// reported it.
+	Title    string `json:"title"`
 	Timezone string `json:"timezone"`
 	// Aliases are the site's previous domains. Events sent to them still
 	// count, so a snippet that wasn't updated after a rename keeps working.

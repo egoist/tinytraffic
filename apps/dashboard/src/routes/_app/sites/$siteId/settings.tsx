@@ -57,6 +57,7 @@ function Settings() {
             </Show>
 
             <TrackingCard siteId={siteId()} domain={s().domain} hasData={s().visitors_24h > 0} />
+            <NameCard site={s()} />
             <DomainCard site={s()} />
             <TimezoneCard siteId={siteId()} timezone={s().timezone} />
             <VisibilityCard site={s()} />
@@ -108,6 +109,50 @@ function TrackingCard(props: { siteId: string; domain: string; hasData: boolean 
             )}
           </p>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function NameCard(props: { site: Site }) {
+  const qc = useQueryClient();
+  const [name, setName] = createSignal(props.site.name);
+  createEffect(() => setName(props.site.name));
+  const save = useMutation(() => ({
+    mutationFn: () => api.updateSite(props.site.id, { name: name().trim() }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["sites"] }),
+  }));
+  const changed = () => name().trim() !== props.site.name;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t().settings.nameTitle}</CardTitle>
+        <CardDescription>{t().settings.nameDescription}</CardDescription>
+      </CardHeader>
+      <CardContent class="grid gap-4">
+        <form
+          class="flex flex-col gap-3 sm:flex-row"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (changed()) save.mutate();
+          }}
+        >
+          <Input
+            aria-label={t().settings.name}
+            autocomplete="off"
+            class="sm:max-w-xs"
+            placeholder={props.site.title || props.site.domain}
+            value={name()}
+            onInput={(e) => setName(e.currentTarget.value)}
+            aria-invalid={save.isError}
+          />
+          <Button type="submit" variant="outline" disabled={!changed() || save.isPending}>
+            {save.isSuccess && !changed() ? t().common.saved : t().common.save}
+          </Button>
+        </form>
+        <Show when={save.error}>
+          <p class="text-sm text-destructive">{errorMessage(save.error)}</p>
+        </Show>
       </CardContent>
     </Card>
   );

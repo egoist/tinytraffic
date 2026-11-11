@@ -61,6 +61,7 @@ declare global {
       u: loc.href,
       d: domain,
       r: doc.referrer || null,
+      t: doc.title,
       w: w.innerWidth,
       h: hashMode ? 1 : 0,
       p: options?.props,

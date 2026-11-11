@@ -23,6 +23,10 @@ async function request<T>(path: string, init?: RequestInit & { json?: unknown })
 export type Site = {
   id: number;
   domain: string;
+  /** What the owner calls the site. Empty to show the title instead. */
+  name: string;
+  /** The title of the site's homepage. */
+  title: string;
   timezone: string;
   /** Previous domains, still accepted from the tracker. */
   aliases: string[];
@@ -135,7 +139,7 @@ export const api = {
   createSite: (domain: string, timezone: string) =>
     request<Site>("/api/sites", { method: "POST", json: { domain, timezone } }),
   site: (ref: string | number) => request<Site>(site(ref)),
-  updateSite: (ref: string | number, patch: { domain?: string; timezone?: string; public?: boolean }) =>
+  updateSite: (ref: string | number, patch: { domain?: string; name?: string; timezone?: string; public?: boolean }) =>
     request<Site>(site(ref), { method: "PATCH", json: patch }),
   removeAlias: (ref: string | number, alias: string) =>
     request<Site>(`${site(ref)}/aliases/${encodeURIComponent(alias)}`, { method: "DELETE" }),

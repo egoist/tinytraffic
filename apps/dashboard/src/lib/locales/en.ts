@@ -225,6 +225,9 @@ export const en = {
     customEventsDescription:
       "Track signups, purchases or anything else. They show up under Goals. Outbound link clicks are tracked automatically.",
     excludeOwn: (code: Rich): Rich => ["Exclude your own visits by running ", code, " in your browser console on your site."],
+    nameTitle: "Name",
+    nameDescription: "Shown in the dashboard instead of the domain. Leave it empty to use your homepage's title.",
+    name: "Site name",
     domainTitle: "Domain",
     domainDescription:
       "Moved your site? Change its domain here. Your stats stay, and events sent to the old domain still count, so existing snippets keep working until you update them.",
@@ -277,7 +280,7 @@ export const en = {
       "Top pages, sources, countries, …",
       "Visitors in the last 5 minutes",
       "Add a site",
-      "Change its domain or timezone",
+      "Change its name, domain or timezone",
       "Delete a site and its stats",
       "Send events for your visitors from a server",
     ],

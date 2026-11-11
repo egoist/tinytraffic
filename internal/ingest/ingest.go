@@ -49,6 +49,8 @@ type payload struct {
 	Domain      string          `json:"domain"`
 	R           string          `json:"r"`
 	Referrer    string          `json:"referrer"`
+	T           string          `json:"t"`
+	Title       string          `json:"title"`
 	W           int             `json:"w"`
 	ScreenWidth int             `json:"screen_width"`
 	H           int             `json:"h"`
@@ -61,6 +63,7 @@ func (p *payload) normalize() {
 	p.U = first(p.U, p.URL)
 	p.D = first(p.D, p.Domain)
 	p.R = first(p.R, p.Referrer)
+	p.T = first(p.T, p.Title)
 	if p.W == 0 {
 		p.W = p.ScreenWidth
 	}
@@ -122,6 +125,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if p.H == 1 && pageURL.Fragment != "" {
 		pathname += "#" + pageURL.Fragment
 	}
+	// The homepage's title is the site's title, see store.Site.
+	title := clip(strings.Join(strings.Fields(p.T), " "), 255)
 	q := pageURL.Query()
 	referrer, source := parseReferrer(p.R, pageURL.Hostname())
 	if s := first(q.Get("utm_source"), q.Get("ref"), q.Get("source")); s != "" {
@@ -166,6 +171,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		seen[site.ID] = true
+		if pathname == "/" && title != "" && title != site.Title {
+			if err := h.Store.SetTitle(site.ID, title); err != nil {
+				h.Log.Error("save site title", "err", err)
+			}
+		}
 		cur, prev, err := h.Salts.Get(now, site.Timezone)
 		if err != nil {
 			h.Log.Error("load salt", "err", err)

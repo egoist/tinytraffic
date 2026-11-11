@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/egoist/tinytraffic/internal/ingest"
 	"github.com/egoist/tinytraffic/internal/stats"
@@ -261,10 +262,13 @@ func (s *Server) listSites(w http.ResponseWriter, r *http.Request) {
 }
 
 type siteBody struct {
-	Domain   string `json:"domain"`
-	Timezone string `json:"timezone"`
-	Public   *bool  `json:"public"`
+	Domain   string  `json:"domain"`
+	Name     *string `json:"name"`
+	Timezone string  `json:"timezone"`
+	Public   *bool   `json:"public"`
 }
+
+const maxNameLength = 100
 
 func (s *Server) createSite(w http.ResponseWriter, r *http.Request) {
 	var body siteBody
@@ -326,8 +330,8 @@ func (s *Server) updateSite(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &body) {
 		return
 	}
-	if body.Domain == "" && body.Timezone == "" && body.Public == nil {
-		writeError(w, http.StatusBadRequest, "nothing to change: send a domain, timezone or public")
+	if body.Domain == "" && body.Timezone == "" && body.Public == nil && body.Name == nil {
+		writeError(w, http.StatusBadRequest, "nothing to change: send a name, domain, timezone or public")
 		return
 	}
 	domain := store.NormalizeDomain(body.Domain)
@@ -335,13 +339,22 @@ func (s *Server) updateSite(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "enter a domain like example.com")
 		return
 	}
+	var name *string
+	if body.Name != nil {
+		n := strings.Join(strings.Fields(*body.Name), " ")
+		if utf8.RuneCountInString(n) > maxNameLength {
+			writeError(w, http.StatusBadRequest, "name must be 100 characters or fewer")
+			return
+		}
+		name = &n
+	}
 	if body.Timezone != "" {
 		if _, err := time.LoadLocation(body.Timezone); err != nil {
 			writeError(w, http.StatusBadRequest, "unknown timezone")
 			return
 		}
 	}
-	site, err := s.Store.UpdateSite(site.ID, store.SiteUpdate{Domain: domain, Timezone: body.Timezone, Public: body.Public})
+	site, err := s.Store.UpdateSite(site.ID, store.SiteUpdate{Domain: domain, Name: name, Timezone: body.Timezone, Public: body.Public})
 	if errors.Is(err, store.ErrExists) {
 		writeError(w, http.StatusConflict, "another site uses this domain")
 		return

@@ -4,6 +4,7 @@ import { ChevronsUpDown, Code, KeyRound, LogOut, Plus, Settings } from "lucide-s
 import { createSignal, For, Show } from "solid-js";
 import { api } from "~/lib/api";
 import { useSignedIn } from "~/lib/auth";
+import { siteName } from "~/lib/format";
 import { AddSiteDialog } from "./add-site-dialog";
 import { ChangePasswordDialog } from "./change-password-dialog";
 import { Logo, LogoMark } from "./logo";
@@ -35,6 +36,10 @@ export function AppHeader() {
     enabled: !!siteId() && signedIn() === false,
   }));
   const current = () => ready(sites)?.find((s) => String(s.id) === siteId()) ?? ready(site);
+  const currentName = () => {
+    const s = current();
+    return s ? siteName(s) : "…";
+  };
   const [adding, setAdding] = createSignal(false);
   const [changingPassword, setChangingPassword] = createSignal(false);
   const logout = useMutation(() => ({
@@ -62,11 +67,11 @@ export function AppHeader() {
               <span class="text-lg font-light text-muted-foreground/50">/</span>
               <Show
                 when={signedIn() !== false}
-                fallback={<span class="truncate px-1 text-sm font-semibold">{current()?.domain ?? "…"}</span>}
+                fallback={<span class="truncate px-1 text-sm font-semibold">{currentName()}</span>}
               >
                 <DropdownMenu placement="bottom-start">
                   <DropdownMenuTrigger as={Button} variant="ghost" size="sm" class="-ml-1 max-w-[60vw] gap-1.5 px-2 font-semibold">
-                    <span class="truncate">{current()?.domain ?? "…"}</span>
+                    <span class="truncate">{currentName()}</span>
                     <ChevronsUpDown class="text-muted-foreground" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent class="w-60">
@@ -77,7 +82,12 @@ export function AppHeader() {
                           checked={String(s.id) === id()}
                           onSelect={() => navigate({ to: "/sites/$siteId", params: { siteId: String(s.id) } })}
                         >
-                          <span class="truncate">{s.domain}</span>
+                          <span class="grid min-w-0">
+                            <span class="truncate">{siteName(s)}</span>
+                            <Show when={siteName(s) !== s.domain}>
+                              <span class="truncate text-xs text-muted-foreground">{s.domain}</span>
+                            </Show>
+                          </span>
                         </DropdownMenuItem>
                       )}
                     </For>

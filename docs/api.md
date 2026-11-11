@@ -83,6 +83,8 @@ scripts: it never changes, while a domain can.
   {
     "id": 1,
     "domain": "example.com",
+    "name": "",
+    "title": "Example Store",
     "timezone": "Asia/Singapore",
     "aliases": [],
     "public": false,
@@ -108,16 +110,21 @@ curl -X POST https://stats.example.com/api/v1/sites \
 ```
 
 ```json
-{ "id": 1, "domain": "example.com", "timezone": "Europe/Berlin", "aliases": [], "public": false, "created_at": "2026-11-10T10:27:15.652313Z" }
+{ "id": 1, "domain": "example.com", "name": "", "title": "", "timezone": "Europe/Berlin", "aliases": [], "public": false, "created_at": "2026-11-10T10:27:15.652313Z" }
 ```
 
-`PATCH /api/v1/sites/{site}` changes the domain, the reporting timezone,
-whether the stats are public, or any of them:
-`{"domain": "new.com", "timezone": "Asia/Tokyo", "public": true}`. Stats are
-kept. The old domain is added to `aliases`: events sent to it still count for
-this site, and it still works in API paths. Returns `409` if another site uses
-the new domain. A public site's dashboard (`/sites/{id}`) can be viewed by
-anyone, without signing in.
+`PATCH /api/v1/sites/{site}` changes the name, the domain, the reporting
+timezone, whether the stats are public, or any of them:
+`{"name": "Example Store", "domain": "new.com", "timezone": "Asia/Tokyo", "public": true}`.
+Stats are kept. The old domain is added to `aliases`: events sent to it still
+count for this site, and it still works in API paths. Returns `409` if another
+site uses the new domain. A public site's dashboard (`/sites/{id}`) can be
+viewed by anyone, without signing in.
+
+A site's `name` is what the dashboard shows instead of its domain. Send an
+empty name to clear it. Names are at most 100 characters. Until a site has a
+name, the dashboard shows its `title`: the `<title>` of its homepage, which
+the tracker sends with each pageview. A site with neither shows its domain.
 
 `DELETE /api/v1/sites/{site}/aliases/{domain}` removes an old domain, so it
 stops recording to this site and can be used for a new one.
@@ -249,7 +256,9 @@ curl -X POST https://stats.example.com/api/event \
 ```
 
 It accepts Plausible's event format (`name`, `url`, `domain`, `referrer`,
-`props`, or the short `n`, `u`, `d`, `r`, `p`) and always answers `202`.
+`props`, or the short `n`, `u`, `d`, `r`, `p`) and always answers `202`. A
+`title` (or `t`) is the page's `<title>`. It becomes the site's title when the
+page is the homepage (`/`), and is ignored for other pages.
 
 Visitors are identified by IP and user agent, and their location comes from
 the IP. When you send events from a server, pass the visitor's user agent as

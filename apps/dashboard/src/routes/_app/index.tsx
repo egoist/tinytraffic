@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/solid-query";
 import { createFileRoute, Link } from "@tanstack/solid-router";
 import { Plus } from "lucide-solid";
-import { createSignal, For, Match, Switch } from "solid-js";
+import { createSignal, For, Match, Show, Switch } from "solid-js";
 import { AddSiteDialog } from "~/components/add-site-dialog";
 import { Realtime } from "~/components/realtime";
 import { Sparkline } from "~/components/sparkline";
@@ -9,7 +9,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, Surface } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
 import { api, type SiteWithStats } from "~/lib/api";
-import { formatFull, formatNumber } from "~/lib/format";
+import { formatFull, formatNumber, siteName } from "~/lib/format";
 import { t } from "~/lib/i18n";
 import { ready } from "~/lib/query";
 
@@ -68,7 +68,8 @@ function Sites() {
 }
 
 function SiteCard(props: { site: SiteWithStats }) {
-  const initial = () => props.site.domain[0]?.toUpperCase() ?? "?";
+  const name = () => siteName(props.site);
+  const initial = () => name()[0]?.toUpperCase() ?? "?";
   return (
     <Link
       to="/sites/$siteId"
@@ -80,7 +81,12 @@ function SiteCard(props: { site: SiteWithStats }) {
           <span class="grid size-6 shrink-0 place-items-center rounded-md bg-card text-xs font-semibold text-muted-foreground shadow-xs ring ring-line">
             {initial()}
           </span>
-          <span class="truncate text-sm font-medium">{props.site.domain}</span>
+          <div class="grid min-w-0">
+            <span class="truncate text-sm font-medium">{name()}</span>
+            <Show when={name() !== props.site.domain}>
+              <span class="truncate text-xs text-muted-foreground">{props.site.domain}</span>
+            </Show>
+          </div>
         </div>
         <CardContent class="flex items-end justify-between gap-4">
           <div>

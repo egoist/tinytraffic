@@ -92,9 +92,11 @@ func (s *Store) CreateSite(domain, timezone string) (Site, error) {
 	return site, nil
 }
 
-// SiteUpdate changes a site. Empty or nil fields are left as they are.
+// SiteUpdate changes a site. Empty or nil fields are left as they are, except
+// Name: a non-nil empty name clears it.
 type SiteUpdate struct {
 	Domain   string
+	Name     *string
 	Timezone string
 	Public   *bool
 }
@@ -110,6 +112,9 @@ func (s *Store) UpdateSite(id int32, u SiteUpdate) (Site, error) {
 	}
 	next := site
 	next.Aliases = slices.Clone(site.Aliases)
+	if u.Name != nil {
+		next.Name = *u.Name
+	}
 	if u.Timezone != "" {
 		next.Timezone = u.Timezone
 	}
@@ -131,6 +136,27 @@ func (s *Store) UpdateSite(id int32, u SiteUpdate) (Site, error) {
 	}
 	s.putSite(next)
 	return next, nil
+}
+
+// SetTitle records a site's homepage title. It writes only when the title
+// has changed, since it runs for every homepage view.
+func (s *Store) SetTitle(id int32, title string) error {
+	s.siteWrite.Lock()
+	defer s.siteWrite.Unlock()
+	site, ok := s.SiteByID(id)
+	if !ok {
+		return ErrNotFound
+	}
+	if site.Title == title {
+		return nil
+	}
+	next := site
+	next.Title = title
+	if err := s.meta.updateSite(site, next); err != nil {
+		return err
+	}
+	s.putSite(next)
+	return nil
 }
 
 // RemoveAlias stops a site from accepting events for one of its old domains.

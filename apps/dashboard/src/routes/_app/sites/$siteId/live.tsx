@@ -7,7 +7,7 @@ import { Logo, LogoMark } from "~/components/logo";
 import { Button } from "~/components/ui/button";
 import { api, type LiveEvent, type LiveSession } from "~/lib/api";
 import { valueLabel } from "~/lib/dims";
-import { countryName, flag, formatNumber } from "~/lib/format";
+import { countryName, flag, formatNumber, siteName } from "~/lib/format";
 import { t } from "~/lib/i18n";
 import { ready } from "~/lib/query";
 import { cn } from "~/lib/utils";
@@ -91,7 +91,10 @@ function LivePage() {
   }));
   const sites = useQuery(() => ({ queryKey: ["sites"], queryFn: api.sites }));
   const info = useQuery(() => ({ queryKey: ["info"], queryFn: api.info, staleTime: Infinity }));
-  const domain = () => ready(sites)?.find((s) => String(s.id) === siteId())?.domain;
+  const name = () => {
+    const site = ready(sites)?.find((s) => String(s.id) === siteId());
+    return site && siteName(site);
+  };
 
   const data = () => ready(live);
   const sessions = () => data()?.sessions ?? [];
@@ -235,7 +238,7 @@ function LivePage() {
           class="pointer-events-none absolute top-1/2 left-1/2 size-[min(140vw,140vh)] -translate-x-1/2 -translate-y-1/2 bg-[radial-gradient(closest-side,var(--chart-wash),transparent)] opacity-70"
         />
         <Globe
-          label={t().live.globe(domain())}
+          label={t().live.globe(name())}
           class="w-[min(calc(100vw-2rem),calc(100dvh-14rem),56rem)] lg:w-[min(calc(100vw-38rem),calc(100dvh-13rem),56rem)]"
           mapSamples={20000}
           markers={markers()}
@@ -284,7 +287,7 @@ function LivePage() {
             </span>
           </span>
           <span class="h-4 w-px bg-border max-sm:hidden" />
-          <span class="max-w-[30vw] truncate font-medium max-sm:hidden">{domain() ?? "…"}</span>
+          <span class="max-w-[30vw] truncate font-medium max-sm:hidden">{name() ?? "…"}</span>
         </div>
         <Button variant="ghost" size="sm" class="ml-auto text-muted-foreground max-sm:px-2" onClick={close} aria-label={t().common.close}>
           <X /> <span class="max-sm:hidden">{t().common.close}</span>

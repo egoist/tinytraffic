@@ -102,3 +102,74 @@ func testRenameSite(t *testing.T, open func() (*Store, error)) {
 		t.Errorf("removed alias is back after reopen: %+v", got)
 	}
 }
+
+func TestSiteNameAndTitle(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "test.duckdb")
+	testSiteNameAndTitle(t, func() (*Store, error) { return Open(path, Options{}) })
+}
+
+func TestSiteNameAndTitleClickHouse(t *testing.T) {
+	url := clickHouseTestDB(t)
+	testSiteNameAndTitle(t, func() (*Store, error) { return Open("", Options{ClickHouseURL: url}) })
+}
+
+func testSiteNameAndTitle(t *testing.T, open func() (*Store, error)) {
+	st, err := open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, _ := st.CreateSite("example.com", "UTC")
+
+	if err := st.SetTitle(a.ID, "Example Store"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := st.SiteByID(a.ID); got.Title != "Example Store" || got.Name != "" {
+		t.Fatalf("after SetTitle: %+v", got)
+	}
+
+	// Naming the site leaves its title and domain alone.
+	shop := "Shop"
+	if a, err = st.UpdateSite(a.ID, SiteUpdate{Name: &shop}); err != nil {
+		t.Fatal(err)
+	}
+	if a.Name != "Shop" || a.Title != "Example Store" || a.Domain != "example.com" {
+		t.Fatalf("after naming: %+v", a)
+	}
+	// An update that doesn't mention the name keeps it.
+	yes := true
+	if a, err = st.UpdateSite(a.ID, SiteUpdate{Public: &yes}); err != nil {
+		t.Fatal(err)
+	}
+	if a.Name != "Shop" {
+		t.Errorf("name changed by an update without one: %+v", a)
+	}
+
+	st.Close()
+	if st, err = open(); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := st.SiteByID(a.ID); got.Name != "Shop" || got.Title != "Example Store" || !got.Public {
+		t.Errorf("after reopen: %+v", got)
+	}
+
+	// An empty name clears it, and the title shows again.
+	empty := ""
+	if a, err = st.UpdateSite(a.ID, SiteUpdate{Name: &empty}); err != nil {
+		t.Fatal(err)
+	}
+	if a.Name != "" || a.Title != "Example Store" {
+		t.Errorf("after clearing the name: %+v", a)
+	}
+	if err := st.SetTitle(a.ID, "Example Shop"); err != nil {
+		t.Fatal(err)
+	}
+
+	st.Close()
+	if st, err = open(); err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if got, _ := st.SiteByID(a.ID); got.Name != "" || got.Title != "Example Shop" {
+		t.Errorf("after clearing and retitling, reopened: %+v", got)
+	}
+}
