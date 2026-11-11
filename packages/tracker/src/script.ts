@@ -18,11 +18,20 @@ declare global {
     _phantom?: unknown;
     __nightmare?: unknown;
     Cypress?: unknown;
+    __tinytrafficLoaded?: boolean;
   }
 }
 
 (() => {
   const w = window;
+
+  // SPA routers (TanStack Start, Astro view transitions, ...) may re-insert
+  // the script tag on navigation, which executes it again. Keep the first
+  // instance: it already watches history, and a second pair of listeners
+  // would send a duplicate pageview for every navigation after this one.
+  if (w.__tinytrafficLoaded) return;
+  w.__tinytrafficLoaded = true;
+
   const doc = document;
   const loc = location;
   const script = doc.currentScript as HTMLScriptElement | null;
