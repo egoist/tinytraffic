@@ -87,9 +87,9 @@ export function MetricTiles(props: {
                 {t().metrics[m.key]}
               </div>
               <Show when={value() !== undefined} fallback={<Skeleton class="mt-2 h-7 w-20" />}>
-                <div class="mt-1.5 flex items-baseline gap-2">
+                <div class="mt-1.5 flex flex-wrap items-baseline gap-2">
                   <span
-                    class="text-2xl font-semibold tracking-tight tabular"
+                    class="whitespace-nowrap text-2xl font-semibold tracking-tight tabular"
                     title={m.key === "visitors" || m.key === "visits" || m.key === "pageviews" ? formatFull(value()!) : undefined}
                   >
                     {m.format(value()!)}
@@ -115,7 +115,7 @@ function Delta(props: { value: number | null; upIsGood: boolean }) {
         return (
           <span
             class={cn(
-              "inline-flex items-center text-xs font-medium tabular",
+              "inline-flex items-center whitespace-nowrap text-xs font-medium tabular",
               rounded() === 0 ? "text-muted-foreground" : good() ? "text-positive" : "text-negative",
             )}
             title={t().metrics.compared}
