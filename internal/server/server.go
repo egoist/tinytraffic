@@ -60,6 +60,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/sites", s.private(s.createSite))
 	// {site} is the site's ID or one of its domains.
 	mux.HandleFunc("GET /api/sites/{site}", s.viewable(s.getSite))
+	mux.HandleFunc("GET /api/sites/{site}/favicon", s.private(s.favicon))
 	mux.HandleFunc("PATCH /api/sites/{site}", s.private(s.updateSite))
 	mux.HandleFunc("DELETE /api/sites/{site}", s.private(s.deleteSite))
 	mux.HandleFunc("DELETE /api/sites/{site}/aliases/{alias}", s.private(s.removeAlias))

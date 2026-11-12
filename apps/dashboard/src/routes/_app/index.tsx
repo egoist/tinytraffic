@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/solid-query";
 import { createFileRoute, Link } from "@tanstack/solid-router";
 import { Plus } from "lucide-solid";
-import { createSignal, For, Match, Show, Switch } from "solid-js";
+import { createEffect, createSignal, For, Match, Show, Switch } from "solid-js";
 import { AddSiteDialog } from "~/components/add-site-dialog";
 import { Realtime } from "~/components/realtime";
 import { Sparkline } from "~/components/sparkline";
@@ -70,6 +70,12 @@ function Sites() {
 function SiteCard(props: { site: SiteWithStats }) {
   const name = () => siteName(props.site);
   const initial = () => name()[0]?.toUpperCase() ?? "?";
+  const [faviconLoaded, setFaviconLoaded] = createSignal(false);
+  createEffect(() => {
+    props.site.domain;
+    setFaviconLoaded(false);
+  });
+
   return (
     <Link
       to="/sites/$siteId"
@@ -78,8 +84,18 @@ function SiteCard(props: { site: SiteWithStats }) {
     >
       <Card class="h-full transition-shadow group-hover:shadow-md group-hover:ring-line">
         <div class="flex items-center gap-2.5 px-4 py-2.5">
-          <span class="grid size-6 shrink-0 place-items-center rounded-md bg-card text-xs font-semibold text-muted-foreground shadow-xs ring ring-line">
-            {initial()}
+          <span class="relative grid size-6 shrink-0 place-items-center rounded-md bg-card text-xs font-semibold text-muted-foreground shadow-xs ring ring-line">
+            <Show when={!faviconLoaded()}>{initial()}</Show>
+            <img
+              src={`/api/sites/${props.site.id}/favicon?domain=${encodeURIComponent(props.site.domain)}`}
+              alt=""
+              class="absolute size-4 object-contain"
+              classList={{ "opacity-0": !faviconLoaded() }}
+              loading="lazy"
+              decoding="async"
+              onLoad={() => setFaviconLoaded(true)}
+              onError={() => setFaviconLoaded(false)}
+            />
           </span>
           <div class="grid min-w-0">
             <span class="truncate text-sm font-medium">{name()}</span>
