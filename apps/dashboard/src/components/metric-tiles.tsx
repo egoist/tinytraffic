@@ -86,7 +86,15 @@ export function MetricTiles(props: {
                 />
                 {t().metrics[m.key]}
               </div>
-              <Show when={value() !== undefined} fallback={<Skeleton class="mt-2 h-7 w-20" />}>
+              <Show
+                when={value() !== undefined}
+                fallback={
+                  <div class="mt-1.5 flex flex-col items-start gap-1">
+                    <Skeleton class="h-8 w-20" />
+                    <Skeleton class="h-4 w-14" />
+                  </div>
+                }
+              >
                 <div class="mt-1.5 flex flex-col items-start gap-1">
                   <span
                     class="whitespace-nowrap text-2xl font-semibold tracking-tight tabular"
