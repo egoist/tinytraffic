@@ -87,7 +87,7 @@ function SiteCard(props: { site: SiteWithStats }) {
           <span class="relative grid size-6 shrink-0 place-items-center rounded-md bg-card text-xs font-semibold text-muted-foreground shadow-xs ring ring-line">
             <Show when={!faviconLoaded()}>{initial()}</Show>
             <img
-              src={`/api/sites/${props.site.id}/favicon?domain=${encodeURIComponent(props.site.domain)}`}
+              src={`/api/sites/${props.site.id}/favicon?v=2&domain=${encodeURIComponent(props.site.domain)}`}
               alt=""
               class="absolute size-4 object-contain"
               classList={{ "opacity-0": !faviconLoaded() }}

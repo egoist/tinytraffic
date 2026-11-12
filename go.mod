@@ -9,6 +9,7 @@ require (
 	github.com/mileusna/useragent v1.3.5
 	github.com/oschwald/maxminddb-golang/v2 v2.9.0
 	golang.org/x/crypto v0.58.0
+	golang.org/x/net v0.62.0
 )
 
 require (
