@@ -146,6 +146,7 @@ export const zh: Messages = {
     bounce_rate: "跳出率",
     visit_duration: "访问时长",
     compared: "与上一周期相比",
+    points: "个百分点",
   },
 
   chart: {

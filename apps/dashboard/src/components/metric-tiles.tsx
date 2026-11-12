@@ -14,12 +14,14 @@ export const metricDefs: {
   format: (n: number) => string;
   /** Whether an increase is good news. */
   upIsGood: boolean;
+  /** Rates change by percentage points rather than by percent. */
+  points?: boolean;
 }[] = [
   { key: "visitors", format: formatNumber, upIsGood: true },
   { key: "visits", format: formatNumber, upIsGood: true },
   { key: "pageviews", format: formatNumber, upIsGood: true },
   { key: "views_per_visit", format: (n) => n.toFixed(2), upIsGood: true },
-  { key: "bounce_rate", format: (n) => formatPercent(n), upIsGood: false },
+  { key: "bounce_rate", format: (n) => formatPercent(n), upIsGood: false, points: true },
   { key: "visit_duration", format: formatDuration, upIsGood: true },
 ];
 
@@ -66,7 +68,19 @@ export function MetricTiles(props: {
       <For each={metricDefs}>
         {(m) => {
           const value = () => props.current?.[m.key];
-          const delta = () => (props.current ? change(props.current[m.key], props.previous?.[m.key]) : null);
+          const delta = () => {
+            const current = props.current?.[m.key];
+            const previous = props.previous?.[m.key];
+            if (current === undefined || previous === undefined) return null;
+            if (m.points) {
+              const points = current - previous;
+              return { value: points, text: `${Math.round(Math.abs(points))}${t().metrics.points}` };
+            }
+            // A percentage needs a non-zero base, so show the amount instead.
+            if (previous === 0 && current !== 0) return { value: current, text: m.format(Math.abs(current)) };
+            const pct = change(current, previous);
+            return pct === null ? null : { value: pct, text: `${Math.abs(Math.round(pct))}%` };
+          };
           const selected = () => props.selected === m.key;
           return (
             <button
@@ -75,7 +89,7 @@ export function MetricTiles(props: {
               onClick={() => props.onSelect(m.key)}
               aria-pressed={selected()}
               class={cn(
-                "group relative cursor-pointer rounded-lg px-3.5 py-3 text-left outline-none transition-[background-color,box-shadow] focus-visible:ring-2 focus-visible:ring-ring",
+                "group relative flex cursor-pointer flex-col justify-start rounded-lg px-3.5 py-3 text-left outline-none transition-[background-color,box-shadow] focus-visible:ring-2 focus-visible:ring-ring",
                 !selected() && "hover:bg-accent",
               )}
             >
@@ -102,7 +116,7 @@ export function MetricTiles(props: {
                   >
                     {m.format(value()!)}
                   </span>
-                  <Delta value={delta()} upIsGood={m.upIsGood} />
+                  <Delta delta={delta()} upIsGood={m.upIsGood} />
                 </div>
               </Show>
             </button>
@@ -113,11 +127,11 @@ export function MetricTiles(props: {
   );
 }
 
-function Delta(props: { value: number | null; upIsGood: boolean }) {
+function Delta(props: { delta: { value: number; text: string } | null; upIsGood: boolean }) {
   return (
-    <Show when={props.value !== null && Number.isFinite(props.value)}>
-      {(_) => {
-        const v = () => props.value!;
+    <Show when={props.delta}>
+      {(d) => {
+        const v = () => d().value;
         const rounded = () => Math.round(v());
         const good = () => (v() > 0) === props.upIsGood;
         return (
@@ -131,7 +145,7 @@ function Delta(props: { value: number | null; upIsGood: boolean }) {
             <Show when={rounded() !== 0}>
               {v() > 0 ? <ArrowUpRight class="size-3.5" /> : <ArrowDownRight class="size-3.5" />}
             </Show>
-            {Math.abs(rounded())}%
+            {d().text}
           </span>
         );
       }}

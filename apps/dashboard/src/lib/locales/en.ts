@@ -144,6 +144,7 @@ export const en = {
     bounce_rate: "Bounce rate",
     visit_duration: "Visit duration",
     compared: "Compared to the previous period",
+    points: " pts",
   },
 
   chart: {
