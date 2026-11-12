@@ -87,7 +87,7 @@ export function MetricTiles(props: {
                 {t().metrics[m.key]}
               </div>
               <Show when={value() !== undefined} fallback={<Skeleton class="mt-2 h-7 w-20" />}>
-                <div class="mt-1.5 flex flex-wrap items-baseline gap-2">
+                <div class="mt-1.5 flex flex-col items-start gap-1">
                   <span
                     class="whitespace-nowrap text-2xl font-semibold tracking-tight tabular"
                     title={m.key === "visitors" || m.key === "visits" || m.key === "pageviews" ? formatFull(value()!) : undefined}
